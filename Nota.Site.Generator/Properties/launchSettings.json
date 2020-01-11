@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Nota.Site.Generator": {
+      "commandName": "Project",
+      "workingDirectory": "C:\\Users\\patri\\source\\repos\\nota-game\\Nota.Site.Generator.Test"
+    }
+  }
+}

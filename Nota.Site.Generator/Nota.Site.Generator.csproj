@@ -1,8 +1,19 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>8.0</LangVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha0050" />
+    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha0050" />
+    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha0050" />
+    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha0050" />
+    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha0050" />
+    <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20054.1" />
+  </ItemGroup>
 
 </Project>
