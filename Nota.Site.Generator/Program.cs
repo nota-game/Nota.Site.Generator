@@ -88,20 +88,14 @@ namespace Nota.Site.Generator
                         .For<BookMetadata>(".metadata")
                     .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
                     .Select(x => x.Markdown().MarkdownToHtml().TextToStream())
-                    .Transform(x => x.WithId(Path.Combine(Enum.GetName(typeof(GitRefType), x.Metadata.GetValue<GitMetadata>()!.Type)!, x.Metadata.GetValue<GitMetadata>()!.Name, x.Id)))
+                    .Transform(x => x.WithId(Path.Combine(x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)))
                 );
 
 
             var contentVersions = contentRepo.Transform(input =>
             {
-                var gitData = input.Value;
-                string version;
-                if (gitData.Type == GitRefType.Branch && gitData.FrindlyName == "master")
-                    version = "vNext";
-                else if (gitData.Type == GitRefType.Branch)
-                    version = "draft/" + gitData.FrindlyName;
-                else
-                    version = gitData.FrindlyName;
+                var gitData = new GitMetadata( input.Value);
+                string version = gitData.CalculatedVersion;
                 return input.With(version, version).WithId(version);
             })
             .OrderBy(x => new VersionComparer(x.Id));
@@ -126,14 +120,9 @@ namespace Nota.Site.Generator
                     .Transform(y =>
                     {
                         var gitData = y.Metadata.GetValue<GitMetadata>()!;
-                        string version;
+                        var version = gitData.CalculatedVersion;
 
-                        if (gitData.Type == GitRefType.Branch && gitData.Name == "master")
-                            version = "vNext";
-                        else if (gitData.Type == GitRefType.Branch)
-                            version = "draft/" + gitData.Name;
-                        else
-                            version = gitData.Name;
+
 
 
                         var host = y.Metadata.GetValue<HostMetadata>()!.Host;
@@ -147,15 +136,7 @@ namespace Nota.Site.Generator
                  .Transform(x =>
                  {
                      var gitData = x.Metadata.GetValue<GitMetadata>()!;
-                     string version;
-
-                     if (gitData.Type == GitRefType.Branch && gitData.Name == "master")
-                         version = "vNext";
-                     else if (gitData.Type == GitRefType.Branch)
-                         version = "draft/" + gitData.Name;
-                     else
-                         version = gitData.Name;
-
+                     var version  = gitData.CalculatedVersion;
 
                      return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
                  })
@@ -219,6 +200,12 @@ namespace Nota.Site.Generator
 
     internal class GitMetadata
     {
+        public GitMetadata(GitRefStage value)
+        {
+            this.Name = value.FrindlyName;
+            this.Type = value.Type;
+        }
+
         public GitMetadata(string name, GitRefType type)
         {
             this.Name = name ?? throw new ArgumentNullException(nameof(name));
@@ -227,6 +214,22 @@ namespace Nota.Site.Generator
 
         public string Name { get; }
         public GitRefType Type { get; }
+
+        public string CalculatedVersion
+        {
+            get
+            {
+                string version;
+                if (this.Type == GitRefType.Branch && this.Name == "master")
+                    version = "vNext";
+                else if (this.Type == GitRefType.Branch)
+                    version = "draft/" + this.Name;
+                else
+                    version = this.Name;
+                return version;
+            }
+        }
+
     }
 
     internal class BookMetadata
