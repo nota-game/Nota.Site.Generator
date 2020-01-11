@@ -76,7 +76,7 @@ namespace Nota.Site.Generator
             var generatorOptions = new GenerationOptions()
             {
                 CompressCache = false,
-                Refresh = false
+                Refresh = true
             };
             var s = System.Diagnostics.Stopwatch.StartNew();
             var files = contentRepo
@@ -180,9 +180,14 @@ namespace Nota.Site.Generator
             var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
             if (status.Any())
             {
-                var filePaths = status.Select(mods => mods.FilePath);
-                foreach (var filePath in filePaths)
+                var filePathsAdded = status.Added.Concat(status.Modified).Concat(status.RenamedInIndex).Concat(status.RenamedInWorkDir).Concat(status.Untracked).Select(mods => mods.FilePath);
+                foreach (var filePath in filePathsAdded)
                     repo.Index.Add(filePath);
+
+                var filePathsRemove = status.Missing.Select(mods => mods.FilePath);
+                foreach (var filePath in filePathsRemove)
+                    repo.Index.Remove(filePath);
+
                 repo.Index.Write();
 
 
