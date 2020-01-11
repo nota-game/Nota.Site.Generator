@@ -34,34 +34,11 @@ namespace Nota.Site.Generator
             var committer = author;
 
 
-            LibGit2Sharp.Repository repo;
             const string workdirPath = "gitOut";
             const string cache = "cache";
             const string output = "out";
-            if (Directory.Exists(workdirPath))
-            {
-                repo = new LibGit2Sharp.Repository(workdirPath);
-                LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() { MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
-            }
-            else
-                repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo ?? throw context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
-            using var repo2 = repo;
 
-
-            if (Directory.Exists(output))
-                Directory.Delete(output, true);
-
-            if (Directory.Exists(cache))
-                Directory.Delete(cache, true);
-
-            Directory.CreateDirectory(output);
-            foreach (var path in new DirectoryInfo(workdirPath).GetDirectories().Where(x => x.Name != ".git"))
-            {
-                if (path.Name == "cache")
-                    path.MoveTo(cache);
-                else
-                    path.MoveTo(Path.Combine(output, path.Name));
-            }
+            using var repo = PreGit(context, config, author, workdirPath, cache, output);
 
 
 
@@ -94,7 +71,7 @@ namespace Nota.Site.Generator
 
             var contentVersions = contentRepo.Transform(input =>
             {
-                var gitData = new GitMetadata( input.Value);
+                var gitData = new GitMetadata(input.Value);
                 string version = gitData.CalculatedVersion;
                 return input.With(version, version).WithId(version);
             })
@@ -136,7 +113,7 @@ namespace Nota.Site.Generator
                  .Transform(x =>
                  {
                      var gitData = x.Metadata.GetValue<GitMetadata>()!;
-                     var version  = gitData.CalculatedVersion;
+                     var version = gitData.CalculatedVersion;
 
                      return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
                  })
@@ -151,6 +128,47 @@ namespace Nota.Site.Generator
 
             await g.UpdateFiles().ConfigureAwait(false);
 
+            PostGit(author, committer, repo, workdirPath, cache, output);
+
+            s.Stop();
+
+            context.Logger.Info($"Operation Took {s.Elapsed}");
+
+
+
+
+        }
+
+        private static LibGit2Sharp.Repository PreGit(GeneratorContext context, Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)
+        {
+            LibGit2Sharp.Repository repo;
+            if (Directory.Exists(workdirPath))
+            {
+                repo = new LibGit2Sharp.Repository(workdirPath);
+                LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() { MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
+            }
+            else
+                repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo ?? throw context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
+
+            if (Directory.Exists(output))
+                Directory.Delete(output, true);
+
+            if (Directory.Exists(cache))
+                Directory.Delete(cache, true);
+
+            Directory.CreateDirectory(output);
+            foreach (var path in new DirectoryInfo(workdirPath).GetDirectories().Where(x => x.Name != ".git"))
+            {
+                if (path.Name == "cache")
+                    path.MoveTo(cache);
+                else
+                    path.MoveTo(Path.Combine(output, path.Name));
+            }
+            return repo;
+        }
+
+        private static void PostGit(LibGit2Sharp.Signature author, LibGit2Sharp.Signature committer, LibGit2Sharp.Repository repo, string workdirPath, string cache, string output)
+        {
             foreach (var path in new DirectoryInfo(output).GetDirectories())
             {
                 path.MoveTo(Path.Combine(workdirPath, path.Name));
@@ -177,14 +195,6 @@ namespace Nota.Site.Generator
 
                 repo.Network.Push(repo.Branches["master"], new LibGit2Sharp.PushOptions() { });
             }
-
-            s.Stop();
-
-            context.Logger.Info($"Operation Took {s.Elapsed}");
-
-
-
-
         }
     }
 
