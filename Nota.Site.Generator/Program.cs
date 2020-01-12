@@ -1,6 +1,7 @@
 ﻿using Stasistium;
 using Stasistium.Documents;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -56,6 +57,17 @@ namespace Nota.Site.Generator
                 Refresh = true
             };
             var s = System.Diagnostics.Stopwatch.StartNew();
+
+            var contentVersions = contentRepo.Transform(input =>
+            {
+                var gitData = new GitMetadata(input.Value);
+                string version = gitData.CalculatedVersion;
+                return input.With(version, version).WithId(version);
+            })
+                .OrderBy(x => new VersionComparer(x.Id))
+                .ListToSingle(x => context.Create("", "", "ContentVersions", context.EmptyMetadata.Add(new ContentVersions(x.Select(x => x.Value)))));
+
+
             var files = contentRepo
                 .SelectMany(input =>
                     input
@@ -65,17 +77,11 @@ namespace Nota.Site.Generator
                         .For<BookMetadata>(".metadata")
                     .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
                     .Select(x => x.Markdown().MarkdownToHtml().TextToStream())
-                    .Transform(x => x.WithId(Path.Combine(x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)))
-                );
+                    .Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)))
+                )
+                .Merge(contentVersions, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<ContentVersions>() ?? throw new InvalidOperationException("Should Not Happen"))));
 
 
-            var contentVersions = contentRepo.Transform(input =>
-            {
-                var gitData = new GitMetadata(input.Value);
-                string version = gitData.CalculatedVersion;
-                return input.With(version, version).WithId(version);
-            })
-            .OrderBy(x => new VersionComparer(x.Id));
 
             var razorProvider = files
                 .FileProvider("Content")
@@ -145,7 +151,17 @@ namespace Nota.Site.Generator
             if (Directory.Exists(workdirPath))
             {
                 repo = new LibGit2Sharp.Repository(workdirPath);
+
+                var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
+
+                if (status.IsDirty)
+                {
+                    var currentCommit = repo.Head.Tip;
+                    repo.Reset(LibGit2Sharp.ResetMode.Hard, currentCommit);
+                }
+
                 LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() { MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
+
             }
             else
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo ?? throw context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
@@ -157,22 +173,30 @@ namespace Nota.Site.Generator
                 Directory.Delete(cache, true);
 
             Directory.CreateDirectory(output);
-            foreach (var path in new DirectoryInfo(workdirPath).GetDirectories().Where(x => x.Name != ".git"))
+            var workDirInfo = new DirectoryInfo(workdirPath);
+            foreach (var path in workDirInfo.GetDirectories().Where(x => x.Name != ".git"))
             {
                 if (path.Name == "cache")
                     path.MoveTo(cache);
                 else
                     path.MoveTo(Path.Combine(output, path.Name));
             }
+            foreach (var path in workDirInfo.GetFiles())
+            {
+                path.MoveTo(Path.Combine(output, path.Name));
+            }
+
             return repo;
         }
 
         private static void PostGit(LibGit2Sharp.Signature author, LibGit2Sharp.Signature committer, LibGit2Sharp.Repository repo, string workdirPath, string cache, string output)
         {
-            foreach (var path in new DirectoryInfo(output).GetDirectories())
-            {
+            var outputInfo = new DirectoryInfo(output);
+            foreach (var path in outputInfo.GetDirectories())
                 path.MoveTo(Path.Combine(workdirPath, path.Name));
-            }
+            foreach (var path in outputInfo.GetFiles())
+                path.MoveTo(Path.Combine(workdirPath, path.Name));
+
             new DirectoryInfo(cache).MoveTo(Path.Combine(workdirPath, cache));
 
 
@@ -194,6 +218,16 @@ namespace Nota.Site.Generator
                 var commit = repo.Commit("Updated Build", author, committer, new LibGit2Sharp.CommitOptions() { });
 
                 repo.Network.Push(repo.Branches["master"], new LibGit2Sharp.PushOptions() { });
+            }
+        }
+
+        private class ContentVersions
+        {
+            private IEnumerable<string> enumerable;
+
+            public ContentVersions(IEnumerable<string> enumerable)
+            {
+                this.enumerable = enumerable;
             }
         }
     }
