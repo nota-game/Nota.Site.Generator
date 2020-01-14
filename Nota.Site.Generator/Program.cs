@@ -25,7 +25,7 @@ namespace Nota.Site.Generator
 
             var configFile = context.StageFromResult(configuration.FullName, x => x)
              .File()
-             .Json()
+             .Json("Parse Configuration")
              .For<Config>();
 
             var config = (await (await configFile.DoIt(null, new GenerationOptions().Token)).Perform).result.Value;
@@ -44,12 +44,12 @@ namespace Nota.Site.Generator
 
 
             var contentRepo = configFile.Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
-                .GitModul();
+                .GitModul("Git for Content");
 
             var schemaRepo = configFile.Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo).With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
-                .GitModul();
+                .GitModul("Git for Schema");
 
-            var layoutProvider = configFile.Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout")).FileSystem().FileProvider("Layout");
+            var layoutProvider = configFile.Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout")).FileSystem().FileProvider("Layout", "Layout FIle Provider");
 
             var generatorOptions = new GenerationOptions()
             {
@@ -76,8 +76,8 @@ namespace Nota.Site.Generator
                     .Sidecar()
                         .For<BookMetadata>(".metadata")
                     .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
-                    .Select(x => x.Markdown().MarkdownToHtml().TextToStream())
-                    .Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)))
+                    .Select(x => x.Markdown(name: "Markdown").MarkdownToHtml("Markdown To HTML").TextToStream(), "Markdown All")
+                    .Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)), "Content Id Change")
                 )
                 .Merge(contentVersions, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<ContentVersions>() ?? throw new InvalidOperationException("Should Not Happen"))));
 
