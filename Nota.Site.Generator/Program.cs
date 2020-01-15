@@ -21,7 +21,7 @@ namespace Nota.Site.Generator
             if (!configuration.Exists)
                 throw new FileNotFoundException($"No configuration file was found ({configuration.FullName})");
 
-            using var context = new GeneratorContext();
+            await using var context = new GeneratorContext();
 
             var configFile = context.StageFromResult(configuration.FullName, x => x)
              .File()
@@ -139,10 +139,6 @@ namespace Nota.Site.Generator
             s.Stop();
 
             context.Logger.Info($"Operation Took {s.Elapsed}");
-
-
-
-
         }
 
         private static LibGit2Sharp.Repository PreGit(GeneratorContext context, Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)
