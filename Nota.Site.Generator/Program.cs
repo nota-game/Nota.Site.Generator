@@ -1,10 +1,14 @@
-﻿using Stasistium;
+﻿using Microsoft.Toolkit.Parsers.Markdown;
+using Stasistium;
 using Stasistium.Documents;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
+using Blocks = Microsoft.Toolkit.Parsers.Markdown.Blocks;
+using Inlines = Microsoft.Toolkit.Parsers.Markdown.Inlines;
 
 namespace Nota.Site.Generator
 {
@@ -69,16 +73,8 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
-                .SelectMany(input =>
-                    input
-                    .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))))
-                    .GitRefToFiles()
-                    .Sidecar()
-                        .For<BookMetadata>(".metadata")
-                    .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
-                    .Select(x => x.Markdown(name: "Markdown").MarkdownToHtml("Markdown To HTML").TextToStream(), "Markdown All")
-                    .Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)), "Content Id Change")
-                )
+                .SelectMany(ContentPipeline)
+                .Select(x => x.Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)), "Content Id Change"))
                 .Merge(contentVersions, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<ContentVersions>() ?? throw new InvalidOperationException("Should Not Happen"))));
 
 
@@ -139,6 +135,68 @@ namespace Nota.Site.Generator
             s.Stop();
 
             context.Logger.Info($"Operation Took {s.Elapsed}");
+        }
+
+        private static Stasistium.Stages.SelectStage<MarkdownDocument, string, StichCache<Stasistium.Stages.SelectCache<Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>, Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>>, Stream, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>> ContentPipeline(Stasistium.Stages.StageBase<GitRefStage, Stasistium.Stages.GeneratedHelper.CacheId<string>> input)
+        {
+            var startData = input
+            .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
+            .GitRefToFiles("Read Files from Git (Content)")
+            .Sidecar()
+                .For<BookMetadata>(".metadata");
+
+            var excel = startData
+                .Where(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                .Select(x => x
+                    .ExcelToMarkdownText()
+                    .Markdown(GenerateMarkdownDocument, name: "Markdown Excel"));
+
+            var markdown = startData
+                .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
+                .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content"));
+
+            var combined = markdown.Concat(excel)
+                .Select(x => x.YamlMarkdownToDocumentMetadata()
+                                .For<OrderMarkdownMetadata>());
+
+            var inserted = combined.Select(input => input.InsertMarkdown(combined));
+
+
+            var stiched = inserted.Stich("stich");
+
+            // TODO: - Merge Markdown Documents ans Split for chepter.
+
+
+
+            var result = stiched
+                .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                    .TextToStream(), "Markdown All");
+
+
+            return result;
+        }
+
+        private static MarkdownDocument GenerateMarkdownDocument()
+        {
+            return MarkdownDocument.CreateBuilder()
+                            .AddBlockParser<Blocks.HeaderBlock.HashParser>()
+                            .AddBlockParser<Blocks.ListBlock.Parser>()
+                            .AddBlockParser<Blocks.TableBlock.Parser>()
+                            .AddBlockParser<Blocks.QuoteBlock.Parser>()
+                            .AddBlockParser<Blocks.LinkReferenceBlock.Parser>()
+                            .AddBlockParser<Markdown.Blocks.InsertBlock.Parser>()
+                            .AddBlockParser<Markdown.Blocks.ChapterHeaderBlock.Parser>()
+                            .AddBlockParser<Markdown.Blocks.YamlBlock<OrderMarkdownMetadata>.Parser>()
+
+                            .AddInlineParser<Inlines.BoldTextInline.Parser>()
+                            .AddInlineParser<Inlines.ItalicTextInline.Parser>()
+                            .AddInlineParser<Inlines.EmojiInline.Parser>()
+                            .AddInlineParser<Inlines.ImageInline.Parser>()
+                            .AddInlineParser<Inlines.MarkdownLinkInline.Parser>()
+                            .AddInlineParser<Inlines.StrikethroughTextInline.Parser>()
+                            .AddInlineParser<Inlines.LinkAnchorInline.Parser>()
+
+                            .Build();
         }
 
         private static LibGit2Sharp.Repository PreGit(GeneratorContext context, Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)

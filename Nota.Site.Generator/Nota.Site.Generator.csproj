@@ -12,11 +12,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha0074" />
-    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha0074" />
-    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha0074" />
-    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha0074" />
-    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha0074" />
+    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha0081" />
+    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha0081" />
+    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha0081" />
+    <PackageReference Include="Stasistium.Office" Version="0.1.0-alpha0081" />
+    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha0081" />
+    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha0081" />
     <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20054.1" />
   </ItemGroup>
 
