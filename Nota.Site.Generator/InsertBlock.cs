@@ -58,7 +58,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
     internal class SoureReferenceBlock : MarkdownBlock
     {
-        public SoureReferenceBlock(IList<MarkdownBlock> blocks, string originalDocument)
+        public SoureReferenceBlock(IList<MarkdownBlock> blocks, IDocument<MarkdownDocument> originalDocument)
         {
             this.Blocks = blocks ?? throw new ArgumentNullException(nameof(blocks));
             this.OriginalDocument = originalDocument ?? throw new ArgumentNullException(nameof(originalDocument));
@@ -66,18 +66,32 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         public IList<MarkdownBlock> Blocks { get; set; }
 
-        public string OriginalDocument { get; set; }
+        public IDocument<MarkdownDocument> OriginalDocument { get; set; }
 
     }
-
     internal class InserBlockResolver
     {
-        private readonly Dictionary<string, MarkdownDocument> lookup;
+        private readonly string relativeTo;
+        private readonly Dictionary<string, IDocument<MarkdownDocument>> lookup;
 
-        public InserBlockResolver(IEnumerable<IDocument<MarkdownDocument>> documents, IGeneratorContext context)
+        public InserBlockResolver(IDocument relativeTo, IEnumerable<IDocument<MarkdownDocument>> documents, IGeneratorContext context)
         {
-            this.lookup = documents.ToDictionary(x => x.Id, x => x.Value);
+            this.relativeTo = relativeTo.Id;
+            this.lookup = documents.SelectMany(this.GetPathes).ToDictionary(x => x.id, x => x.document);
             this.Context = context;
+        }
+
+        private IEnumerable<(string id, IDocument<MarkdownDocument> document)> GetPathes(IDocument<MarkdownDocument> document)
+        {
+            yield return ("/" + document.Id, document);
+
+            var currentFolder = System.IO.Path.GetDirectoryName(this.relativeTo)?.Replace('\\', '/');
+            if (currentFolder is null)
+                yield break;
+            if (!currentFolder.EndsWith('/'))
+                currentFolder += '/';
+            if (document.Id.StartsWith(currentFolder))
+                yield return (document.Id.Substring(currentFolder.Length), document);
         }
 
         public IGeneratorContext Context { get; }
@@ -151,7 +165,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
                         if (!this.lookup.TryGetValue(insertBlock.Reference, out var referencedDocument))
                             throw this.Context.Exception($"Could not find referenced document {insertBlock.Reference}");
 
-                        return new SoureReferenceBlock(this.DeepCopy(referencedDocument.Blocks), insertBlock.Reference);
+                        return new SoureReferenceBlock(this.DeepCopy(referencedDocument.Value.Blocks), referencedDocument);
                     }
 
                 case SoureReferenceBlock soureReferenceBlock:
@@ -240,7 +254,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         protected override Task<IDocument<MarkdownDocument>> Work(IDocument<MarkdownDocument> inputSingle0, ImmutableList<IDocument<MarkdownDocument>> inputList0, OptionToken options)
         {
-            var resolver = new InserBlockResolver(inputList0, this.Context);
+            var resolver = new InserBlockResolver(inputSingle0, inputList0, this.Context);
 
             var resolvedDocument = resolver.Resolve(inputSingle0.Value);
 

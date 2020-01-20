@@ -47,15 +47,18 @@ namespace Nota.Site.Generator
 
                     foreach (var item in performed.result)
                     {
+                        var resolver = new RelativePathResolver(item.Id, result.Ids);
                         var itemTask = await item.Perform;
                         var order = itemTask.result.Metadata.GetValue<OrderMarkdownMetadata>();
                         if (order?.After != null)
-                            idToAfter[itemTask.result.Id] = order.After;
+                            idToAfter[itemTask.result.Id] = resolver[order.After];
 
                         if (this.ContainsChapters(itemTask.result.Value.Blocks))
                             documentsWithChapters.Add(itemTask.result.Id);
 
                     }
+
+
 
                     // check for double entrys
 
@@ -73,22 +76,29 @@ namespace Nota.Site.Generator
 
                     var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
 
-                    // check for circles or gaps
-                    if (startValues.Length == 0)
-                        // we have a circle.
-                        throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
-                    if (startValues.Length > 1)
-                        throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
-
-                    // Order the entrys.
+                    if (stateLookup.Count != 1)
                     {
-                        var current = startValues.Single().Key;
-                        while (true)
+                        // check for circles or gaps
+                        if (startValues.Length == 0)
+                            // we have a circle.
+                            throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
+                        if (startValues.Length > 1)
+                            throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
+
+                        // Order the entrys.
                         {
-                            orderedList.Insert(0, current);
-                            if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
-                                break;
+                            var current = startValues.Single().Key;
+                            while (true)
+                            {
+                                orderedList.Insert(0, current);
+                                if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
+                                    break;
+                            }
                         }
+                    }
+                    else
+                    {
+                        orderedList.Add(stateLookup.First().Key);
                     }
 
 
@@ -243,26 +253,32 @@ namespace Nota.Site.Generator
 
                     var orderedList = new List<string>();
 
-                    var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
-
-                    // check for circles or gaps
-                    if (startValues.Length == 0)
-                        // we have a circle.
-                        throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
-                    if (startValues.Length > 1)
-                        throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
-
-                    // Order the entrys.
+                    if (stateLookup.Count != 1)
                     {
-                        var current = startValues.Single().Key;
-                        while (true)
+                        var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
+
+                        // check for circles or gaps
+                        if (startValues.Length == 0)
+                            // we have a circle.
+                            throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
+                        if (startValues.Length > 1)
+                            throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
+
+                        // Order the entrys.
                         {
-                            orderedList.Insert(0, current);
-                            if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
-                                break;
+                            var current = startValues.Single().Key;
+                            while (true)
+                            {
+                                orderedList.Insert(0, current);
+                                if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
+                                    break;
+                            }
                         }
                     }
-
+                    else
+                    {
+                        orderedList.Add(stateLookup.First().Key);
+                    }
 
                     // partition the list with chepters
 

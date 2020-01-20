@@ -88,7 +88,6 @@ namespace Nota.Site.Generator
             var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
             var schemaFiles = schemaRepo
-
                 .SelectMany(input =>
                  input
                  .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))))
@@ -100,14 +99,8 @@ namespace Nota.Site.Generator
                     {
                         var gitData = y.Metadata.GetValue<GitMetadata>()!;
                         var version = gitData.CalculatedVersion;
-
-
-
-
                         var host = y.Metadata.GetValue<HostMetadata>()!.Host;
-
                         var newText = hostReplacementRegex.Replace(y.Value, @$"{host}/schema/{version}/");
-
                         return y.With(newText, y.Context.GetHashForString(newText));
                     })
                     .TextToStream()
@@ -122,7 +115,10 @@ namespace Nota.Site.Generator
 
                         );
 
+
+
             var g = rendered
+                .Where(x => true)
                 .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                 .Concat(schemaFiles)
                 .Persist(new DirectoryInfo(output), generatorOptions)
@@ -137,7 +133,7 @@ namespace Nota.Site.Generator
             context.Logger.Info($"Operation Took {s.Elapsed}");
         }
 
-        private static Stasistium.Stages.SelectStage<MarkdownDocument, string, StichCache<Stasistium.Stages.SelectCache<Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>, Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>>, Stream, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>> ContentPipeline(Stasistium.Stages.StageBase<GitRefStage, Stasistium.Stages.GeneratedHelper.CacheId<string>> input)
+        private static Stasistium.Stages.SelectStage<MarkdownDocument, string, Stasistium.Stages.GroupByStage<Stream, string, Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, MarkdownDocument, string, Stasistium.Stages.TransformStageCache<StichCache<Stasistium.Stages.SelectCache<Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>, Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.TransformStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>>>, string>.GroupByCache, Stream, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>> ContentPipeline(Stasistium.Stages.StageBase<GitRefStage, Stasistium.Stages.GeneratedHelper.CacheId<string>> input)
         {
             var startData = input
             .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
@@ -145,30 +141,42 @@ namespace Nota.Site.Generator
             .Sidecar()
                 .For<BookMetadata>(".metadata");
 
-            var excel = startData
-                .Where(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
-                .Select(x => x
-                    .ExcelToMarkdownText()
-                    .Markdown(GenerateMarkdownDocument, name: "Markdown Excel"));
 
-            var markdown = startData
-                .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
-                .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content"));
+            var grouped = startData.Where(x => x.Id.StartsWith("books/")).GroupBy
+                (x =>
+            {
+                var startIndex = x.Id.IndexOf('/') + 1;
+                var endIndex = x.Id.IndexOf('/', startIndex);
+                return x.Id[startIndex..endIndex];
+            }
 
-            var combined = markdown.Concat(excel)
-                .Select(x => x.YamlMarkdownToDocumentMetadata()
-                                .For<OrderMarkdownMetadata>());
+            , (input, key) =>
+            {
+                var excel = input
+                    .Where(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                    .Select(x => x
+                        .ExcelToMarkdownText()
+                        .Markdown(GenerateMarkdownDocument, name: "Markdown Excel"));
 
-            var inserted = combined.Select(input => input.InsertMarkdown(combined));
+                var markdown = input
+                    .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
+                    .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content"));
+
+                var combined = markdown.Concat(excel)
+                    .Select(x => x.YamlMarkdownToDocumentMetadata()
+                                    .For<OrderMarkdownMetadata>());
+
+                var inserted = combined.Select(input => input.InsertMarkdown(combined));
 
 
-            var stiched = inserted.Stich("stich");
+                var stiched = inserted.Stich("stich")
+                    .Transform(x=>x.WithId($"{key}/{x.Id}"));
 
-            // TODO: - Merge Markdown Documents ans Split for chepter.
+                return stiched;
+            });
 
 
-
-            var result = stiched
+            var result = grouped
                 .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
                     .TextToStream(), "Markdown All");
 
