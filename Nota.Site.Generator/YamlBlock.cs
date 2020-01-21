@@ -32,10 +32,17 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
                     .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.CamelCaseNamingConvention.Instance)
                     .Build();
-                var obj = deserializer.Deserialize<T>(markdown.Substring(firstNonSpace, end - firstNonSpace));
-                if (obj is null)
+                try
+                {
+                    var obj = deserializer.Deserialize<T>(markdown.Substring(firstNonSpace, end - firstNonSpace));
+                    if (obj is null)
+                        return null;
+                    return BlockParseResult.Create(new YamlBlock<T>(obj), firstNonSpace, end + 3 /*for the last 3 dashes*/);
+                }
+                catch (YamlDotNet.Core.YamlException e)
+                {
                     return null;
-                return BlockParseResult.Create(new YamlBlock<T>(obj), firstNonSpace, end + 3 /*for the last 3 dashes*/);
+                }
             }
         }
     }
