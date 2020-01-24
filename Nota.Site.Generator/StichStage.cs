@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace Nota.Site.Generator
 {
-    internal class StichStage<TItemCache, TCache> : Stasistium.Stages.MultiStageBase<MarkdownDocument, string, StichCache<TCache>>
+    public class StichStage<TItemCache, TCache> : Stasistium.Stages.MultiStageBase<MarkdownDocument, string, StichCache<TCache>>
         where TCache : class
         where TItemCache : class
     {
@@ -541,7 +541,7 @@ namespace Nota.Site.Generator
         public string? After { get; set; }
     }
 
-    internal class Partition
+    public class Partition
     {
         /// <summary>
         /// Input ids in this partition
@@ -553,7 +553,7 @@ namespace Nota.Site.Generator
         public (string Id, string Hash)[] Documents { get; set; }
     }
 
-    internal class StichCache<TCache>
+    public class StichCache<TCache>
     {
         public TCache PreviousCache { get; set; }
 
@@ -567,7 +567,7 @@ namespace Nota.Site.Generator
 
 namespace Nota.Site.Generator
 {
-    internal static partial class StageExtensions
+    public static partial class StageExtensions
     {
         public static StichStage<TListItemCache, TListCache> Stich<TListItemCache, TListCache>(this MultiStageBase<MarkdownDocument, TListItemCache, TListCache> input, string? name = null)
         where TListItemCache : class

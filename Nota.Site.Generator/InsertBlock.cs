@@ -15,7 +15,7 @@ using Nota.Site.Generator.Markdown.Blocks;
 
 namespace Nota.Site.Generator.Markdown.Blocks
 {
-    internal class InsertBlock : MarkdownBlock
+    public class InsertBlock : MarkdownBlock
     {
         public string Reference { get; }
 
@@ -56,7 +56,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
     }
 
-    internal class SoureReferenceBlock : MarkdownBlock
+    public class SoureReferenceBlock : MarkdownBlock
     {
         public SoureReferenceBlock(IList<MarkdownBlock> blocks, IDocument<MarkdownDocument> originalDocument)
         {
@@ -69,7 +69,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
         public IDocument<MarkdownDocument> OriginalDocument { get; set; }
 
     }
-    internal class InserBlockResolver
+    public class InserBlockResolver
     {
         private readonly string relativeTo;
         private readonly Dictionary<string, IDocument<MarkdownDocument>> lookup;
@@ -243,7 +243,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
     }
 
 
-    internal class InsertMarkdownStage<TSingleCache, TListItemCache, TListCache> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List1StageBase<MarkdownDocument, TSingleCache, MarkdownDocument, TListItemCache, TListCache, MarkdownDocument>
+    public class InsertMarkdownStage<TSingleCache, TListItemCache, TListCache> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List1StageBase<MarkdownDocument, TSingleCache, MarkdownDocument, TListItemCache, TListCache, MarkdownDocument>
         where TSingleCache : class
         where TListItemCache : class
         where TListCache : class
@@ -266,7 +266,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 }
 namespace Nota.Site.Generator
 {
-    internal static partial class StageExtensions
+    public static partial class StageExtensions
     {
         public static InsertMarkdownStage<TSingleCache, TListItemCache, TListCache> InsertMarkdown<TSingleCache, TListItemCache, TListCache>(this StageBase<MarkdownDocument, TSingleCache> input, MultiStageBase<MarkdownDocument, TListItemCache, TListCache> allDocuments, string? name = null)
         where TSingleCache : class

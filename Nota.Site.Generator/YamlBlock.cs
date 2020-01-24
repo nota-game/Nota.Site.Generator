@@ -5,7 +5,7 @@ using System;
 
 namespace Nota.Site.Generator.Markdown.Blocks
 {
-    internal class YamlBlock<T> : MarkdownBlock
+    public class YamlBlock<T> : MarkdownBlock
     {
         public YamlBlock(T data)
         {

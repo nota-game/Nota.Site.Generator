@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 namespace Nota.Site.Generator.Markdown.Blocks
 {
-    internal class YamlMarkdownToDocumentMetadataStage<T, TCache> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List0StageBase<MarkdownDocument, TCache, MarkdownDocument>
+    public class YamlMarkdownToDocumentMetadataStage<T, TCache> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List0StageBase<MarkdownDocument, TCache, MarkdownDocument>
         where TCache : class
         where T : class
     {
@@ -30,15 +30,15 @@ namespace Nota.Site.Generator.Markdown.Blocks
 }
 namespace Nota.Site.Generator
 {
-    internal static partial class StageExtensions
+    public static partial class StageExtensions
     {
-        internal static YamlMarkdownToDocumentMetadataHelper<TCache> YamlMarkdownToDocumentMetadata<TCache>(this StageBase<MarkdownDocument, TCache> input, string? name = null)
+        public static YamlMarkdownToDocumentMetadataHelper<TCache> YamlMarkdownToDocumentMetadata<TCache>(this StageBase<MarkdownDocument, TCache> input, string? name = null)
             where TCache : class
         {
             return new YamlMarkdownToDocumentMetadataHelper<TCache>(input, name);
         }
 
-        internal class YamlMarkdownToDocumentMetadataHelper<TCache>
+        public class YamlMarkdownToDocumentMetadataHelper<TCache>
         where TCache : class
         {
             private StageBase<MarkdownDocument, TCache> input;

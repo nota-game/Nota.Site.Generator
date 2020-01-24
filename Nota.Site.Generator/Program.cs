@@ -14,6 +14,8 @@ namespace Nota.Site.Generator
 {
     class Program
     {
+
+
         /// <summary>
         /// The Main Method
         /// </summary>
@@ -73,8 +75,72 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
-                .SelectMany(ContentPipeline)
+                .SelectMany(input =>
+                {
+                    var startData = input
+                    .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
+                    .GitRefToFiles("Read Files from Git (Content)")
+                        //.Sidecar()
+                        //    .For<BookMetadata>(".metadata")
+                        ;
+
+
+                    var grouped = startData.Where(x => x.Id.StartsWith("books/")).GroupBy
+                        (x =>
+                        {
+                            var startIndex = x.Id.IndexOf('/') + 1;
+                            var endIndex = x.Id.IndexOf('/', startIndex);
+                            return x.Id[startIndex..endIndex];
+                        }
+
+                    , (input, key) =>
+                    {
+
+                        var bookData = input.Where(x => x.Id == $"books/{key}/.bookdata")
+                            .SingleEntry()
+                            .Markdown(GenerateMarkdownDocument)
+                            .YamlMarkdownToDocumentMetadata()
+                                .For<BookMetadata>();
+
+                        var excel = input
+                            .Where(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                            .Select(x => x
+                                .ExcelToMarkdownText()
+                                .Markdown(GenerateMarkdownDocument, name: "Markdown Excel"));
+
+                        var markdown = input
+                            .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
+                            .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content"));
+
+                        var combined = markdown.Concat(excel)
+                            .Select(x => x.YamlMarkdownToDocumentMetadata()
+                                            .For<OrderMarkdownMetadata>());
+
+                        var inserted = combined.Select(input => input.InsertMarkdown(combined));
+
+
+                        var stiched = inserted.Stich("stich")
+                            .Transform(x => x.WithId($"{key}/{x.Id}"))
+                            .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.GetValue<BookMetadata>())));
+
+
+
+                        return stiched;
+                    });
+
+
+                    var result = grouped
+                        .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                            .TextToStream(), "Markdown All");
+
+
+                    return result;
+                })
                 .Select(x => x.Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)), "Content Id Change"))
+
+            //.SelectMany(x=>
+            //                x.GitRefToFiles("Read Files from Git (Content)"))
+
                 .Merge(contentVersions, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<ContentVersions>() ?? throw new InvalidOperationException("Should Not Happen"))));
 
 
@@ -115,10 +181,14 @@ namespace Nota.Site.Generator
 
                         );
 
-
-
-            var g = rendered
+            var rendered2 = rendered
                 .Where(x => true)
+
+
+
+                ;
+
+            var g = rendered2
                 .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                 .Concat(schemaFiles)
                 .Persist(new DirectoryInfo(output), generatorOptions)
@@ -133,67 +203,7 @@ namespace Nota.Site.Generator
             context.Logger.Info($"Operation Took {s.Elapsed}");
         }
 
-        private static Stasistium.Stages.SelectStage<MarkdownDocument, string, Stasistium.Stages.GroupByStage<Stream, string, Stasistium.Stages.WhereStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>, MarkdownDocument, string, Stasistium.Stages.MergeCache<Stasistium.Stages.TransformStageCache<StichCache<Stasistium.Stages.SelectCache<Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>, Stasistium.Stages.SelectCache<Stasistium.Stages.ConcatStageManyCache<Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>, Stasistium.Stages.SelectCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>, string>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>>>>, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.WhereStageCache<Stasistium.Stages.StartCache<Stasistium.Stages.WhereStageCache<Stasistium.Stages.GeneratedHelper.CachelessIds<Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>>, string>>>>>>, string>.GroupByCache, Stream, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string, Stasistium.Stages.GeneratedHelper.CacheId<string>>>> ContentPipeline(Stasistium.Stages.StageBase<GitRefStage, Stasistium.Stages.GeneratedHelper.CacheId<string>> input)
-        {
-            var startData = input
-            .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-            .GitRefToFiles("Read Files from Git (Content)")
-            //.Sidecar()
-            //    .For<BookMetadata>(".metadata")
-                ;
 
-
-            var grouped = startData.Where(x => x.Id.StartsWith("books/")).GroupBy
-                (x =>
-            {
-                var startIndex = x.Id.IndexOf('/') + 1;
-                var endIndex = x.Id.IndexOf('/', startIndex);
-                return x.Id[startIndex..endIndex];
-            }
-
-            , (input, key) =>
-            {
-
-                var bookData = input.Where(x => x.Id == $"books/{key}/.bookdata")
-                    .SingleEntry()
-                    .Markdown(GenerateMarkdownDocument)
-                    .YamlMarkdownToDocumentMetadata()
-                        .For<BookMetadata>();
-
-                var excel = input
-                    .Where(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
-                    .Select(x => x
-                        .ExcelToMarkdownText()
-                        .Markdown(GenerateMarkdownDocument, name: "Markdown Excel"));
-
-                var markdown = input
-                    .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
-                    .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content"));
-
-                var combined = markdown.Concat(excel)
-                    .Select(x => x.YamlMarkdownToDocumentMetadata()
-                                    .For<OrderMarkdownMetadata>());
-
-                var inserted = combined.Select(input => input.InsertMarkdown(combined));
-
-
-                var stiched = inserted.Stich("stich")
-                    .Transform(x => x.WithId($"{key}/{x.Id}"))
-                    .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.GetValue<BookMetadata>())));
-
-
-
-                return stiched;
-            });
-
-
-            var result = grouped
-                .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
-                    .TextToStream(), "Markdown All");
-
-
-            return result;
-        }
 
         private static MarkdownDocument GenerateMarkdownDocument()
         {
