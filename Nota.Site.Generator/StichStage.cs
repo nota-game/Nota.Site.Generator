@@ -186,7 +186,7 @@ namespace Nota.Site.Generator
                             if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                                 chapterName = chapterheaderBlock.ChapterId;
                             if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                chapterName = this.GetIdFromHeader(headerBlock);
+                                chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
                             else
                                 chapterName = "Pre";
                             return documents.First().result.With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
@@ -368,7 +368,7 @@ namespace Nota.Site.Generator
                                 if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                                     chapterName = chapterheaderBlock.ChapterId;
                                 if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                    chapterName = this.GetIdFromHeader(headerBlock);
+                                    chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
                                 else
                                     chapterName = "Pre";
                                 return documents.First().result.With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
@@ -437,7 +437,7 @@ namespace Nota.Site.Generator
                                     if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                                         chapterName = chapterheaderBlock.ChapterId;
                                     if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                        chapterName = this.GetIdFromHeader(headerBlock);
+                                        chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
                                     else
                                         chapterName = "Pre";
                                     return this.Context.Create(newDoc, this.Context.GetHashForString(newDoc.ToString()), chapterName);
@@ -501,29 +501,7 @@ namespace Nota.Site.Generator
             return StageResultList.Create(task, hasChanges, ids);
         }
 
-        private string GetIdFromHeader(HeaderBlock headerBlock)
-        {
-            return ToText2(headerBlock.Inlines);
-
-            static string ToText2(IEnumerable<MarkdownInline> inlines)
-            {
-                return string.Join(" ", inlines.Select(ToText));
-            }
-
-            static string ToText(MarkdownInline inline)
-            {
-                if (inline is TextRunInline textRun)
-                    return textRun.Text;
-                if (inline is BoldTextInline bold)
-                    return ToText2(bold.Inlines);
-                if (inline is ItalicTextInline italic)
-                    return ToText2(italic.Inlines);
-                if (inline is StrikethroughTextInline strikethrough)
-                    return ToText2(strikethrough.Inlines);
-
-                return inline.ToString()!;
-            }
-        }
+       
 
         private bool ContainsChapters(IList<MarkdownBlock> blocks)
         {

@@ -1,8 +1,10 @@
 ﻿using Microsoft.Toolkit.Parsers.Markdown;
+using Microsoft.Toolkit.Parsers.Markdown.Blocks;
 using Stasistium;
 using Stasistium.Documents;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -129,9 +131,11 @@ namespace Nota.Site.Generator
                             .Transform(x => x.WithId($"{key}/{x.Id}"))
                             .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.GetValue<BookMetadata>())));
 
+                        var chapters = stiched.ListToSingle(x => x.First().Context.Create(string.Empty, string.Empty, "chapters", x.First().Context.EmptyMetadata.Add(GenerateContentsTable(x))));
 
+                        var stichedWithContentsTable = stiched.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)));
 
-                        return stiched;
+                        return stichedWithContentsTable;
                     });
 
 
@@ -156,7 +160,7 @@ namespace Nota.Site.Generator
                 .Concat(layoutProvider, "Concat Content and layout FileProvider")
                 .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart");
 
-            var rendered = files.Select(razorProvider,(x, provider) => x.Razor(provider).TextToStream());
+            var rendered = files.Select(razorProvider, (x, provider) => x.Razor(provider).TextToStream());
             var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
             var schemaFiles = schemaRepo
@@ -183,20 +187,15 @@ namespace Nota.Site.Generator
                      var version = gitData.CalculatedVersion;
 
                      return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
-                 })
-
-                        );
+                 }));
 
             var rendered2 = rendered
                 .Where(x => true)
-
-
-
                 ;
 
             var g = rendered2
                 .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
-                //.Concat(schemaFiles)
+                .Concat(schemaFiles)
                 .Persist(new DirectoryInfo(output), generatorOptions)
                 ;
 
@@ -209,7 +208,101 @@ namespace Nota.Site.Generator
             context.Logger.Info($"Operation Took {s.Elapsed}");
         }
 
+        private static TableOfContents GenerateContentsTable(ImmutableList<IDocument<MarkdownDocument>> documents)
+        {
+            var chapters = documents.Select(chapterDocument =>
+            {
+                TableOfContentsEntry? entry = null;
 
+                //entry.Page = chapterDocument.Id;
+                //entry.Id = string.Empty;
+                //entry.Level = 0;
+
+                var stack = new Stack<MarkdownBlock>();
+
+                PushBlocks(chapterDocument.Value.Blocks);
+
+                void PushBlocks(IEnumerable<MarkdownBlock> blocks)
+                {
+                    foreach (var item in blocks.Reverse())
+                        stack.Push(item);
+                }
+
+                var chapterList = new Stack<TableOfContentsEntry>();
+
+                while (stack.TryPop(out var currentBlock))
+                {
+                    switch (currentBlock)
+                    {
+                        case HeaderBlock headerBlock:
+                            var id = Nota.Site.Generator.Markdown.Blocks.ChapterHeaderBlock.GetHeaderText(headerBlock);
+
+                            var currentChapter = new TableOfContentsEntry()
+                            {
+                                Level = headerBlock.HeaderLevel,
+                                Page = chapterDocument.Id,
+                                Id = id
+                            };
+
+                            if (!chapterList.TryPeek(out var lastChapter))
+                                lastChapter = null;
+                            if (lastChapter is null)
+                            {
+                                System.Diagnostics.Debug.Assert(entry is null);
+                                chapterList.Push(currentChapter);
+                                entry = currentChapter;
+                            }
+                            else if (lastChapter.Level < currentChapter.Level)
+                            {
+                                lastChapter.Sections.Add(currentChapter);
+                                chapterList.Push(currentChapter);
+                            }
+                            else
+                            {
+
+                                while (lastChapter.Level >= currentChapter.Level)
+                                {
+                                    chapterList.Pop();
+                                    lastChapter = chapterList.Peek();
+                                }
+
+                                if (lastChapter is null)
+                                {
+                                    throw new InvalidOperationException("Should not happen after stich");
+                                }
+                                else
+                                {
+                                    lastChapter.Sections.Add(currentChapter);
+                                    chapterList.Push(currentChapter);
+                                }
+                            }
+
+
+                            break;
+                        case Markdown.Blocks.SoureReferenceBlock insert:
+                            PushBlocks(insert.Blocks);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                if (entry is null)
+                {
+                    entry = new TableOfContentsEntry
+                    {
+                        Page = chapterDocument.Id,
+                        Id = string.Empty,
+                        Level = 0
+                    };
+                }
+                return entry;
+            }).ToArray();
+
+            return new TableOfContents()
+            {
+                Chapters = chapters
+            };
+        }
 
         private static MarkdownDocument GenerateMarkdownDocument()
         {

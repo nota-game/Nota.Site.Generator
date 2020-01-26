@@ -13,7 +13,7 @@ namespace Nota.Site.Generator
             switch (block)
             {
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
-                    builder.Append($"<div class=\"{sourceReferenceBlock.OriginalDocument}\">");
+                    builder.Append($"<div class=\"{sourceReferenceBlock.OriginalDocument.Id}\">");
                     this.Render(builder, sourceReferenceBlock.Blocks);
                     builder.Append("</div>");
 
