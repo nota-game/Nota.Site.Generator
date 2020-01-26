@@ -49,13 +49,19 @@ namespace Nota.Site.Generator
 
 
 
-            var contentRepo = configFile.Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
+            var contentRepo = configFile
+                .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
                 .GitModul("Git for Content");
 
-            var schemaRepo = configFile.Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo).With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
+            var schemaRepo = configFile
+                .Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
+                .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                 .GitModul("Git for Schema");
 
-            var layoutProvider = configFile.Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout")).FileSystem().FileProvider("Layout", "Layout FIle Provider");
+            var layoutProvider = configFile
+                .Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"))
+                .FileSystem("Layout Filesystem")
+                .FileProvider("Layout", "Layout FIle Provider");
 
             var generatorOptions = new GenerationOptions()
             {
@@ -135,7 +141,7 @@ namespace Nota.Site.Generator
 
 
                     return result;
-                })
+                }, "Working on content branches")
                 .Select(x => x.Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)), "Content Id Change"))
 
             //.SelectMany(x=>
@@ -146,11 +152,11 @@ namespace Nota.Site.Generator
 
 
             var razorProvider = files
-                .FileProvider("Content")
-                .Concat(layoutProvider)
-                .RazorProvider("Content", "Layout/ViewStart.cshtml");
+                .FileProvider("Content", "Content file Provider")
+                .Concat(layoutProvider, "Concat Content and layout FileProvider")
+                .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart");
 
-            var rendered = files.Select(x => x.Razor(razorProvider).TextToStream());
+            var rendered = files.Select(razorProvider,(x, provider) => x.Razor(provider).TextToStream());
             var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
             var schemaFiles = schemaRepo
@@ -190,7 +196,7 @@ namespace Nota.Site.Generator
 
             var g = rendered2
                 .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
-                .Concat(schemaFiles)
+                //.Concat(schemaFiles)
                 .Persist(new DirectoryInfo(output), generatorOptions)
                 ;
 
