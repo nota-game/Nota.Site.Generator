@@ -224,10 +224,11 @@ namespace Nota.Site.Generator
                     {
                         if (item.HasChanges)
                         {
+                            var resolver = new RelativePathResolver(item.Id, result.Ids);
                             var itemTask = await item.Perform;
                             var order = itemTask.result.Metadata.GetValue<OrderMarkdownMetadata>();
                             if (order?.After != null)
-                                idToAfter[itemTask.result.Id] = order.After;
+                                idToAfter[itemTask.result.Id] = resolver[order.After];
                             else
                                 idToAfter.Remove(itemTask.result.Id);
 
@@ -380,7 +381,7 @@ namespace Nota.Site.Generator
                             foreach (var item in documentsInPartition)
                             {
                                 var oldHash = cachePartition?.Documents.FirstOrDefault(x => x.Id == item.Id).Hash;
-                                list.Add(StageResult.Create(item, item.Hash, oldHash == item.Hash, item.Id));
+                                list.Add(StageResult.Create(item, item.Hash, oldHash != item.Hash, item.Id));
                             }
                         }
                         else
