@@ -146,10 +146,19 @@ namespace Nota.Site.Generator
 
                     return result;
                 }, "Working on content branches")
-                .Select(x => x.Transform(x => x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id)), "Content Id Change"))
+                .Select(x => x.Transform(x =>
+                {
+                    var prefix = Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion).Replace('\\', '/');
 
-            //.SelectMany(x=>
-            //                x.GitRefToFiles("Read Files from Git (Content)"))
+                    var changedDocument = x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id).Replace('\\', '/'))
+                            .With(x.Metadata.AddOrUpdate(new BookMetadata() { Location = prefix }, (oldValue, newValue) => oldValue.WithLocation(newValue.Location)));
+                    return changedDocument;
+                }
+
+                    , "Content Id Change"))
+
+                //.SelectMany(x=>
+                //                x.GitRefToFiles("Read Files from Git (Content)"))
 
                 .Merge(contentVersions, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<ContentVersions>() ?? throw new InvalidOperationException("Should Not Happen"))));
 
@@ -463,6 +472,9 @@ namespace Nota.Site.Generator
     {
         public string Title { get; set; }
         public int Chapter { get; set; }
+        public string Location { get; set; }
+
+        public BookMetadata WithLocation(string location) => new BookMetadata() { Title = this.Title, Chapter = this.Chapter, Location = location };
     }
 
     internal class HostMetadata
