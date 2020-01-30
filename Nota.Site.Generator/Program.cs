@@ -36,7 +36,7 @@ namespace Nota.Site.Generator
              .Json("Parse Configuration")
              .For<Config>();
 
-            var config = (await (await configFile.DoIt(null, new GenerationOptions().Token)).Perform).result.Value;
+            var config = (await (await configFile.DoIt(null, new GenerationOptions().Token)).Perform).Value;
 
             // Create the committer's signature and commit
             var author = new LibGit2Sharp.Signature("NotaSiteGenerator", "@NotaSiteGenerator", DateTime.Now);
@@ -83,6 +83,7 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
+                .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
                 .SelectMany(input =>
                 {
                     var startData = input

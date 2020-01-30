@@ -40,21 +40,21 @@ namespace Nota.Site.Generator
 
                 if (cache is null)
                 {
-                    var stateLookup = performed.result.ToDictionary(x => x.Id);
+                    var stateLookup = performed.ToDictionary(x => x.Id);
                     var idToAfter = new Dictionary<string, string>();
 
                     var documentsWithChapters = new HashSet<string>();
 
-                    foreach (var item in performed.result)
+                    foreach (var item in performed)
                     {
                         var resolver = new RelativePathResolver(item.Id, result.Ids);
                         var itemTask = await item.Perform;
-                        var order = itemTask.result.Metadata.GetValue<OrderMarkdownMetadata>();
+                        var order = itemTask.Metadata.GetValue<OrderMarkdownMetadata>();
                         if (order?.After != null)
-                            idToAfter[itemTask.result.Id] = resolver[order.After];
+                            idToAfter[itemTask.Id] = resolver[order.After];
 
-                        if (this.ContainsChapters(itemTask.result.Value.Blocks))
-                            documentsWithChapters.Add(itemTask.result.Id);
+                        if (this.ContainsChapters(itemTask.Value.Blocks))
+                            documentsWithChapters.Add(itemTask.Id);
 
                     }
 
@@ -152,7 +152,7 @@ namespace Nota.Site.Generator
 
                         for (int j = 0; j < documents.Length; j++)
                         {
-                            foreach (var block in documents[j].result.Value.Blocks)
+                            foreach (var block in documents[j].Value.Blocks)
                             {
                                 if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
                                     currentList.Add(block);
@@ -179,7 +179,7 @@ namespace Nota.Site.Generator
 
                         var documentsInPartition = listOfChaptersInPartition.Select(x =>
                         {
-                            var newDoc = documents.First().result.Value.GetBuilder().Build();
+                            var newDoc = documents.First().Value.GetBuilder().Build();
                             newDoc.Blocks = x.ToArray();
 
                             string chapterName;
@@ -189,7 +189,7 @@ namespace Nota.Site.Generator
                                 chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
                             else
                                 chapterName = "Pre";
-                            return documents.First().result.With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
+                            return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
                         }).ToArray();
                         partitition.Ids = currentParition.ToArray();
 
@@ -199,7 +199,7 @@ namespace Nota.Site.Generator
                         foreach (var item in documentsInPartition)
                         {
 
-                            list.Add(StageResult.Create(item, item.Hash, true, item.Id));
+                            list.Add(StageResult.Create(item, true, item.Id, item.Hash));
                         }
 
 
@@ -210,32 +210,32 @@ namespace Nota.Site.Generator
                         DocumentsWithChapters = documentsWithChapters.ToArray(),
                         IDToAfterEntry = idToAfter,
                         Partitions = newPatirions.ToArray(),
-                        PreviousCache = performed.cache
+                        PreviousCache = result.Cache
                     };
                 }
                 else
                 {
-                    var stateLookup = performed.result.ToDictionary(x => x.Id);
+                    var stateLookup = performed.ToDictionary(x => x.Id);
                     var idToAfter = cache.IDToAfterEntry.ToDictionary(x => x.Key, x => x.Value);
 
                     var documentsWithChapters = new HashSet<string>(cache.DocumentsWithChapters);
 
-                    foreach (var item in performed.result)
+                    foreach (var item in performed)
                     {
                         if (item.HasChanges)
                         {
                             var resolver = new RelativePathResolver(item.Id, result.Ids);
                             var itemTask = await item.Perform;
-                            var order = itemTask.result.Metadata.GetValue<OrderMarkdownMetadata>();
+                            var order = itemTask.Metadata.GetValue<OrderMarkdownMetadata>();
                             if (order?.After != null)
-                                idToAfter[itemTask.result.Id] = resolver[order.After];
+                                idToAfter[itemTask.Id] = resolver[order.After];
                             else
-                                idToAfter.Remove(itemTask.result.Id);
+                                idToAfter.Remove(itemTask.Id);
 
-                            if (this.ContainsChapters(itemTask.result.Value.Blocks))
-                                documentsWithChapters.Add(itemTask.result.Id);
+                            if (this.ContainsChapters(itemTask.Value.Blocks))
+                                documentsWithChapters.Add(itemTask.Id);
                             else
-                                documentsWithChapters.Remove(itemTask.result.Id);
+                                documentsWithChapters.Remove(itemTask.Id);
 
                         }
                     }
@@ -334,7 +334,7 @@ namespace Nota.Site.Generator
 
                             for (int j = 0; j < documents.Length; j++)
                             {
-                                foreach (var block in documents[j].result.Value.Blocks)
+                                foreach (var block in documents[j].Value.Blocks)
                                 {
                                     if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
                                         currentList.Add(block);
@@ -362,7 +362,7 @@ namespace Nota.Site.Generator
 
                             var documentsInPartition = listOfChaptersInPartition.Select(x =>
                             {
-                                var newDoc = documents.First().result.Value.GetBuilder().Build();
+                                var newDoc = documents.First().Value.GetBuilder().Build();
                                 newDoc.Blocks = x.ToArray();
 
                                 string chapterName;
@@ -372,7 +372,7 @@ namespace Nota.Site.Generator
                                     chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
                                 else
                                     chapterName = "Pre";
-                                return documents.First().result.With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
+                                return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
                             }).ToArray();
 
                             partitition.Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray();
@@ -381,7 +381,7 @@ namespace Nota.Site.Generator
                             foreach (var item in documentsInPartition)
                             {
                                 var oldHash = cachePartition?.Documents.FirstOrDefault(x => x.Id == item.Id).Hash;
-                                list.Add(StageResult.Create(item, item.Hash, oldHash != item.Hash, item.Id));
+                                list.Add(StageResult.Create(item, oldHash != item.Hash, item.Id, item.Hash));
                             }
                         }
                         else
@@ -404,7 +404,7 @@ namespace Nota.Site.Generator
 
                                 for (int j = 0; j < documents.Length; j++)
                                 {
-                                    foreach (var block in documents[j].result.Value.Blocks)
+                                    foreach (var block in documents[j].Value.Blocks)
                                     {
                                         if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
                                             currentList.Add(block);
@@ -431,7 +431,7 @@ namespace Nota.Site.Generator
 
                                 var documentsInPartition = listOfChaptersInPartition.Select(x =>
                                 {
-                                    var newDoc = documents.First().result.Value.GetBuilder().Build();
+                                    var newDoc = documents.First().Value.GetBuilder().Build();
                                     newDoc.Blocks = x.ToArray();
 
                                     string chapterName;
@@ -452,9 +452,9 @@ namespace Nota.Site.Generator
                                 var task = LazyTask.Create(async () =>
                                 {
                                     var x = await baseTask;
-                                    return (x.First(x => x.Id == oldId && x.Hash == oldHash), oldHash);
+                                    return x.First(x => x.Id == oldId && x.Hash == oldHash);
                                 });
-                                list.Add(StageResult.Create(task, false, oldId));
+                                list.Add(StageResult.Create(task, false, oldId, oldHash));
                             }
 
                         }
@@ -466,7 +466,7 @@ namespace Nota.Site.Generator
                         DocumentsWithChapters = documentsWithChapters.ToArray(),
                         IDToAfterEntry = idToAfter,
                         Partitions = newPatirions.ToArray(),
-                        PreviousCache = performed.cache
+                        PreviousCache = result.Cache
                     };
 
                 }
@@ -484,8 +484,8 @@ namespace Nota.Site.Generator
 
             if (cache is null || result.HasChanges)
             {
-                var performed = await result.Perform;
-                ids = performed.result.Select(x => x.Id).ToImmutableList();
+                var (performed, newCache) = await task;
+                ids = performed.Select(x => x.Id).ToImmutableList();
                 if (cache is null)
                 {
                     hasChanges = true;
@@ -493,16 +493,22 @@ namespace Nota.Site.Generator
                 else
                 {
                     hasChanges = !cache.Partitions.SelectMany(x => x.Documents).Select(x => x.Id).SequenceEqual(ids)
-                        || performed.result.Any(x => x.HasChanges);
+                        || performed.Any(x => x.HasChanges);
                 }
+
+                return StageResultList.Create(performed, hasChanges, ids, newCache);
             }
             else
                 ids = cache.Partitions.SelectMany(x => x.Documents).Select(x => x.Id).ToImmutableList();
-
-            return StageResultList.Create(task, hasChanges, ids);
+            var actualTask = LazyTask.Create(async () =>
+            {
+                var temp = await task;
+                return temp.Item1;
+            });
+            return StageResultList.Create(actualTask, hasChanges, ids, cache);
         }
 
-       
+
 
         private bool ContainsChapters(IList<MarkdownBlock> blocks)
         {
