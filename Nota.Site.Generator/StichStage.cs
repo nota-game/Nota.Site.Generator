@@ -49,7 +49,7 @@ namespace Nota.Site.Generator
                     {
                         var resolver = new RelativePathResolver(item.Id, result.Ids);
                         var itemTask = await item.Perform;
-                        var order = itemTask.Metadata.GetValue<OrderMarkdownMetadata>();
+                        var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
                         if (order?.After != null)
                             idToAfter[itemTask.Id] = resolver[order.After];
 
@@ -186,7 +186,7 @@ namespace Nota.Site.Generator
                             if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                                 chapterName = chapterheaderBlock.ChapterId;
                             if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
+                                chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
                             else
                                 chapterName = "Pre";
                             return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
@@ -369,7 +369,7 @@ namespace Nota.Site.Generator
                                 if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                                     chapterName = chapterheaderBlock.ChapterId;
                                 if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                    chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
+                                    chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
                                 else
                                     chapterName = "Pre";
                                 return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
@@ -438,7 +438,7 @@ namespace Nota.Site.Generator
                                     if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                                         chapterName = chapterheaderBlock.ChapterId;
                                     if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                        chapterName = ChapterHeaderBlock.GetHeaderText(headerBlock);
+                                        chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
                                     else
                                         chapterName = "Pre";
                                     return this.Context.Create(newDoc, this.Context.GetHashForString(newDoc.ToString()), chapterName);

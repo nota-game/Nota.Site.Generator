@@ -173,6 +173,17 @@ namespace Nota.Site.Generator.Markdown.Blocks
                         return new SoureReferenceBlock(this.DeepCopy(soureReferenceBlock.Blocks), soureReferenceBlock.OriginalDocument);
                     }
 
+                case Block b:
+                    {
+                        return new Block()
+                        {
+                            BlockType = b.BlockType,
+                            Blocks = this.DeepCopy(b.Blocks),
+                            Reference = b.Reference,
+                            Distributions = b.Distributions
+                        };
+                    }
+
                 default:
                     throw new NotSupportedException($"Block of type {block.GetType()} is not supported");
             }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Toolkit.Parsers.Markdown.Blocks;
 using Microsoft.Toolkit.Parsers.Markdown.Inlines;
 using Stasistium.Stages;
+using System.Linq;
 using System.Text;
 
 namespace Nota.Site.Generator
@@ -15,6 +16,13 @@ namespace Nota.Site.Generator
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
                     builder.Append($"<div class=\"{sourceReferenceBlock.OriginalDocument.Id}\">");
                     this.Render(builder, sourceReferenceBlock.Blocks);
+                    builder.Append("</div>");
+
+                    break;
+
+                case Markdown.Blocks.Block blocks:
+                    builder.Append($"<div id=\"{blocks.Reference}\" class=\"{blocks.BlockType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
+                    this.Render(builder, blocks.Blocks);
                     builder.Append("</div>");
 
                     break;

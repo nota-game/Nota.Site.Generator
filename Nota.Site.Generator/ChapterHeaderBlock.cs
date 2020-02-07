@@ -89,29 +89,5 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 public string? HeroImage { get; set; }
             }
         }
-
-        public static  string GetHeaderText(HeaderBlock headerBlock)
-        {
-            return ToText2(headerBlock.Inlines);
-
-            static string ToText2(IEnumerable<MarkdownInline> inlines)
-            {
-                return string.Join(" ", inlines.Select(ToText));
-            }
-
-            static string ToText(MarkdownInline inline)
-            {
-                if (inline is TextRunInline textRun)
-                    return textRun.Text;
-                if (inline is BoldTextInline bold)
-                    return ToText2(bold.Inlines);
-                if (inline is ItalicTextInline italic)
-                    return ToText2(italic.Inlines);
-                if (inline is StrikethroughTextInline strikethrough)
-                    return ToText2(strikethrough.Inlines);
-
-                return inline.ToString()!;
-            }
-        }
     }
 }
