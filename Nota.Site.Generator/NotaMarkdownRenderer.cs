@@ -21,7 +21,7 @@ namespace Nota.Site.Generator
                     break;
 
                 case Markdown.Blocks.SideNote blocks:
-                    builder.Append($"<div id=\"{blocks.Reference}\" class=\"{blocks.SideNoteType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
+                    builder.Append($"<div id=\"{blocks.Id}\" class=\"{blocks.SideNoteType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
                     this.Render(builder, blocks.Blocks);
                     builder.Append("</div>");
 

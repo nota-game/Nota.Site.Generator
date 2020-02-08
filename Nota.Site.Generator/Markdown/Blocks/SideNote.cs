@@ -12,11 +12,23 @@ namespace Nota.Site.Generator.Markdown.Blocks
 {
     public class SideNote : MarkdownBlock
     {
-        public string Reference { get; set; }
-        public SideNoteType SideNoteType { get; set; }
+        public SideNote(string id, SideNoteType sideNoteType, IEnumerable<(string id, byte distribution)> distributions, IEnumerable<MarkdownBlock> blocks)
+        {
+            if (distributions is null)
+                throw new ArgumentNullException(nameof(distributions));
+            if (blocks is null)
+                throw new ArgumentNullException(nameof(blocks));
+            this.Id = id ?? throw new ArgumentNullException(nameof(id));
+            this.SideNoteType = sideNoteType;
+            this.Distributions = distributions.ToImmutableArray();
+            this.Blocks = blocks.ToImmutableArray();
+        }
 
-        public ImmutableArray<(string id, byte distribution)> Distributions { get; set; } = ImmutableArray<(string id, byte distribution)>.Empty;
-        public IList<MarkdownBlock> Blocks { get; set; }
+        public string Id { get; }
+        public SideNoteType SideNoteType { get; }
+
+        public ImmutableArray<(string id, byte distribution)> Distributions { get; }
+        public ImmutableArray<MarkdownBlock> Blocks { get; }
 
         public new class Parser : Parser<SideNote>
         {
@@ -29,12 +41,10 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     return null;
 
                 var lines = new LineSplitter(markdown.AsSpan(startOfLine, maxEnd - startOfLine));
-                bool blockTypeWasParsed = false;
                 //var distributionList = ImmutableArray<>
-                var result = new SideNote();
-                var builder = result.Distributions.ToBuilder();
-
-
+                var builder = ImmutableArray<(string id, byte distribution)>.Empty.ToBuilder();
+                string? id = null;
+                SideNoteType? type = null;
                 var buffer = new StringBuilder();
                 bool header = true;
                 int lastend = 0;
@@ -56,16 +66,15 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
                     if (header)
                     {
-                        if (result.Reference == null)
+                        if (id == null)
                         {
-                            result.Reference = text.ToString();
+                            id = text.ToString();
                         }
-                        else if (!blockTypeWasParsed)
+                        else if (!type.HasValue)
                         {
-                            blockTypeWasParsed = true;
                             if (!Enum.TryParse<SideNoteType>(text.ToString(), out var parsed))
                                 parsed = SideNoteType.Undefined;
-                            result.SideNoteType = parsed;
+                            type = parsed;
                         }
                         else
                         {
@@ -81,18 +90,54 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     }
                 }
 
-                /**/
-                result.Distributions = builder.ToImmutable();
-
                 var blocks = document.ParseBlocks(buffer.ToString(), 0, buffer.Length, out _);
+                var result = new SideNote(id ?? string.Empty, type ?? SideNoteType.Undefined, builder, blocks);
 
-                result.Blocks = blocks;
                 return BlockParseResult.Create(result, startOfLine, lastend + startOfLine);
             }
 
 
         }
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+
+            if (this.Id != null)
+                WriteLine(this.Id);
+            WriteLine(this.SideNoteType.ToString());
+            foreach (var (id, value) in this.Distributions)
+            {
+                Write(id);
+                builder.Append(' ');
+                builder.Append(value);
+                builder.AppendLine();
+            }
+
+            builder.AppendLine("|---");
+            var splitter = new LineSplitter(this.Blocks.ToString());
+            while (splitter.TryGetNextLine(out var line, out _, out _))
+            {
+                WriteLine(line);
+            }
+
+            void WriteLine(ReadOnlySpan<char> txt)
+            {
+                Write(txt);
+                builder.AppendLine();
+            }
+            void Write(ReadOnlySpan<char> txt)
+            {
+                builder.Append("| ");
+                builder.Append(txt);
+            }
+
+
+            return builder.ToString();
+        }
     }
+
+
     public ref struct LineSplitter
     {
         private readonly ReadOnlySpan<char> text;

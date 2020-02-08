@@ -175,13 +175,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
                 case SideNote b:
                     {
-                        return new SideNote()
-                        {
-                            SideNoteType = b.SideNoteType,
-                            Blocks = this.DeepCopy(b.Blocks),
-                            Reference = b.Reference,
-                            Distributions = b.Distributions
-                        };
+                        return new SideNote(b.Id, b.SideNoteType, b.Distributions, this.DeepCopy(b.Blocks));
                     }
 
                 default:
