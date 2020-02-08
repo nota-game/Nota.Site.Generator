@@ -10,20 +10,20 @@ using System.Text.RegularExpressions;
 
 namespace Nota.Site.Generator.Markdown.Blocks
 {
-    public class Block : MarkdownBlock
+    public class SideNote : MarkdownBlock
     {
         public string Reference { get; set; }
-        public BlockType BlockType { get; set; }
+        public SideNoteType SideNoteType { get; set; }
 
         public ImmutableArray<(string id, byte distribution)> Distributions { get; set; } = ImmutableArray<(string id, byte distribution)>.Empty;
         public IList<MarkdownBlock> Blocks { get; set; }
 
-        public new class Parser : Parser<Block>
+        public new class Parser : Parser<SideNote>
         {
 
             private readonly Regex distributionPatter = new Regex(@"(?<id>\S+)\s+(?<distribution>\d)", RegexOptions.Compiled);
 
-            protected override BlockParseResult<Block>? ParseInternal(string markdown, int startOfLine, int firstNonSpace, int endOfFirstLine, int maxStart, int maxEnd, bool lineStartsNewParagraph, MarkdownDocument document)
+            protected override BlockParseResult<SideNote>? ParseInternal(string markdown, int startOfLine, int firstNonSpace, int endOfFirstLine, int maxStart, int maxEnd, bool lineStartsNewParagraph, MarkdownDocument document)
             {
                 if (markdown[startOfLine] != '|')
                     return null;
@@ -31,7 +31,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 var lines = new LineSplitter(markdown.AsSpan(startOfLine, maxEnd - startOfLine));
                 bool blockTypeWasParsed = false;
                 //var distributionList = ImmutableArray<>
-                var result = new Block();
+                var result = new SideNote();
                 var builder = result.Distributions.ToBuilder();
 
 
@@ -63,9 +63,9 @@ namespace Nota.Site.Generator.Markdown.Blocks
                         else if (!blockTypeWasParsed)
                         {
                             blockTypeWasParsed = true;
-                            if (!Enum.TryParse<BlockType>(text.ToString(), out var parsed))
-                                parsed = BlockType.Undefined;
-                            result.BlockType = parsed;
+                            if (!Enum.TryParse<SideNoteType>(text.ToString(), out var parsed))
+                                parsed = SideNoteType.Undefined;
+                            result.SideNoteType = parsed;
                         }
                         else
                         {
@@ -144,7 +144,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
     }
 
-    public enum BlockType
+    public enum SideNoteType
     {
         Undefined,
         Beispiel,

@@ -409,7 +409,7 @@ namespace Nota.Site.Generator
                             .AddBlockParser<Markdown.Blocks.ChapterHeaderBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.YamlBlock<OrderMarkdownMetadata>.Parser>()
                             .AddBlockParser<Markdown.Blocks.YamlBlock<BookMetadata>.Parser>()
-                            .AddBlockParser<Markdown.Blocks.Block.Parser>()
+                            .AddBlockParser<Markdown.Blocks.SideNote.Parser>()
 
                             .AddInlineParser<Inlines.BoldTextInline.Parser>()
                             .AddInlineParser<Inlines.ItalicTextInline.Parser>()

@@ -173,11 +173,11 @@ namespace Nota.Site.Generator.Markdown.Blocks
                         return new SoureReferenceBlock(this.DeepCopy(soureReferenceBlock.Blocks), soureReferenceBlock.OriginalDocument);
                     }
 
-                case Block b:
+                case SideNote b:
                     {
-                        return new Block()
+                        return new SideNote()
                         {
-                            BlockType = b.BlockType,
+                            SideNoteType = b.SideNoteType,
                             Blocks = this.DeepCopy(b.Blocks),
                             Reference = b.Reference,
                             Distributions = b.Distributions
