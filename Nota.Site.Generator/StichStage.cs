@@ -20,16 +20,17 @@ namespace Nota.Site.Generator
         where TCache : class
         where TItemCache : class
     {
-        private readonly StagePerformHandler<MarkdownDocument, TItemCache, TCache> input;
+        private const string NoChapterName = "index";
+        private readonly MultiStageBase<MarkdownDocument, TItemCache, TCache> input;
 
-        public StichStage(StagePerformHandler<MarkdownDocument, TItemCache, TCache> input, IGeneratorContext context, string? name = null) : base(context, name)
+        public StichStage(MultiStageBase<MarkdownDocument, TItemCache, TCache> input, IGeneratorContext context, string? name = null) : base(context, name)
         {
             this.input = input ?? throw new ArgumentNullException(nameof(input));
         }
 
         protected override async Task<StageResultList<MarkdownDocument, string, StichCache<TCache>>> DoInternal(StichCache<TCache>? cache, OptionToken options)
         {
-            var result = await this.input(cache?.PreviousCache, options);
+            var result = await this.input.DoIt(cache?.PreviousCache, options);
 
             var task = LazyTask.Create(async () =>
             {
@@ -140,60 +141,14 @@ namespace Nota.Site.Generator
 
                         var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
 
-                        var listOfChaptersInPartition = new List<List<MarkdownBlock>>();
+                        var listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
 
-                        List<MarkdownBlock>? currentList = null;
-
-                        if (takeFirstWithoutChapter)
+                        var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
+                        var partitition = new Partition
                         {
-                            currentList = new List<MarkdownBlock>();
-                            listOfChaptersInPartition.Add(currentList);
-                        }
-
-                        for (int j = 0; j < documents.Length; j++)
-                        {
-                            foreach (var block in documents[j].Value.Blocks)
-                            {
-                                if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
-                                    currentList.Add(block);
-
-                                else if (block is HeaderBlock header && header.HeaderLevel == 1
-                                    && (j != documents.Length - 1 // the last block is also the first of the nex partition
-                                        || takeLastChapter)) // we don't want to have (double) unless its the last partition.
-                                {
-                                    currentList = new List<MarkdownBlock>();
-                                    listOfChaptersInPartition.Add(currentList);
-                                    currentList.Add(block);
-                                }
-                                else if (block is HeaderBlock header__ && header__.HeaderLevel == 1
-                                    && j == documents.Length - 1)
-                                {
-                                    // we wan't to break the for not foreach, but we are alreary in the last for loop.
-                                    break; // so this is enough
-                                }
-                            }
-
-                        }
-
-                        var partitition = new Partition();
-
-                        var documentsInPartition = listOfChaptersInPartition.Select(x =>
-                        {
-                            var newDoc = documents.First().Value.GetBuilder().Build();
-                            newDoc.Blocks = x.ToArray();
-
-                            string chapterName;
-                            if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
-                                chapterName = chapterheaderBlock.ChapterId;
-                            if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
-                            else
-                                chapterName = "Pre";
-                            return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
-                        }).ToArray();
-                        partitition.Ids = currentParition.ToArray();
-
-                        partitition.Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray();
+                            Ids = currentParition.ToArray(),
+                            Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray()
+                        };
 
                         newPatirions.Add(partitition);
                         foreach (var item in documentsInPartition)
@@ -226,7 +181,7 @@ namespace Nota.Site.Generator
                         {
                             var resolver = new RelativePathResolver(item.Id, result.Ids);
                             var itemTask = await item.Perform;
-                            var order = itemTask.Metadata.GetValue<OrderMarkdownMetadata>();
+                            var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
                             if (order?.After != null)
                                 idToAfter[itemTask.Id] = resolver[order.After];
                             else
@@ -322,60 +277,16 @@ namespace Nota.Site.Generator
                         {
                             var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
 
-                            var listOfChaptersInPartition = new List<List<MarkdownBlock>>();
+                            var listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
 
-                            List<MarkdownBlock>? currentList = null;
+                            var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
 
-                            if (takeFirstWithoutChapter)
+
+                            var partitition = new Partition
                             {
-                                currentList = new List<MarkdownBlock>();
-                                listOfChaptersInPartition.Add(currentList);
-                            }
-
-                            for (int j = 0; j < documents.Length; j++)
-                            {
-                                foreach (var block in documents[j].Value.Blocks)
-                                {
-                                    if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
-                                        currentList.Add(block);
-
-                                    else if (block is HeaderBlock header && header.HeaderLevel == 1
-                                        && (j != documents.Length - 1 // the last block is also the first of the nex partition
-                                            || takeLastChapter)) // we don't want to have (double) unless its the last partition.
-                                    {
-                                        currentList = new List<MarkdownBlock>();
-                                        listOfChaptersInPartition.Add(currentList);
-                                        currentList.Add(block);
-                                    }
-                                    else if (block is HeaderBlock header__ && header__.HeaderLevel == 1
-                                        && j == documents.Length - 1)
-                                    {
-                                        // we wan't to break the for not foreach, but we are alreary in the last for loop.
-                                        break; // so this is enough
-                                    }
-                                }
-
-                            }
-
-                            var partitition = new Partition();
-                            partitition.Ids = currentParition.ToArray();
-
-                            var documentsInPartition = listOfChaptersInPartition.Select(x =>
-                            {
-                                var newDoc = documents.First().Value.GetBuilder().Build();
-                                newDoc.Blocks = x.ToArray();
-
-                                string chapterName;
-                                if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
-                                    chapterName = chapterheaderBlock.ChapterId;
-                                if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                    chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
-                                else
-                                    chapterName = "Pre";
-                                return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
-                            }).ToArray();
-
-                            partitition.Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray();
+                                Ids = currentParition.ToArray(),
+                                Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray()
+                            };
 
                             newPatirions.Add(partitition);
                             foreach (var item in documentsInPartition)
@@ -392,57 +303,8 @@ namespace Nota.Site.Generator
                             {
                                 var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
 
-                                var listOfChaptersInPartition = new List<List<MarkdownBlock>>();
-
-                                List<MarkdownBlock>? currentList = null;
-
-                                if (takeFirstWithoutChapter)
-                                {
-                                    currentList = new List<MarkdownBlock>();
-                                    listOfChaptersInPartition.Add(currentList);
-                                }
-
-                                for (int j = 0; j < documents.Length; j++)
-                                {
-                                    foreach (var block in documents[j].Value.Blocks)
-                                    {
-                                        if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
-                                            currentList.Add(block);
-
-                                        else if (block is HeaderBlock header && header.HeaderLevel == 1
-                                            && (j != documents.Length - 1 // the last block is also the first of the nex partition
-                                                || takeLastChapter)) // we don't want to have (double) unless its the last partition.
-                                        {
-                                            currentList = new List<MarkdownBlock>();
-                                            listOfChaptersInPartition.Add(currentList);
-                                            currentList.Add(block);
-                                        }
-                                        else if (block is HeaderBlock header__ && header__.HeaderLevel == 1
-                                            && j == documents.Length - 1)
-                                        {
-                                            // we wan't to break the for not foreach, but we are alreary in the last for loop.
-                                            break; // so this is enough
-                                        }
-
-                                    }
-
-                                }
-
-
-                                var documentsInPartition = listOfChaptersInPartition.Select(x =>
-                                {
-                                    var newDoc = documents.First().Value.GetBuilder().Build();
-                                    newDoc.Blocks = x.ToArray();
-
-                                    string chapterName;
-                                    if (newDoc.Blocks.First() is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
-                                        chapterName = chapterheaderBlock.ChapterId;
-                                    if (newDoc.Blocks.First() is HeaderBlock headerBlock)
-                                        chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
-                                    else
-                                        chapterName = "Pre";
-                                    return this.Context.Create(newDoc, this.Context.GetHashForString(newDoc.ToString()), chapterName);
-                                }).ToArray();
+                                var listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
+                                var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
 
                                 return documentsInPartition;
                             });
@@ -508,6 +370,79 @@ namespace Nota.Site.Generator
             return StageResultList.Create(actualTask, hasChanges, ids, cache);
         }
 
+        private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IDocument<MarkdownDocument>[] documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
+        {
+            return listOfChaptersInPartition.Select(x =>
+            {
+                var order = x.Select(value => value.containingDocument).Distinct().Select((value, index) => (value, index)).ToDictionary(y => y.value, y => y.index);
+                var orderedGroups = x.GroupBy(y => y.containingDocument).OrderBy(y => order[y.Key]);
+
+                var referenceBlocks = orderedGroups.Select(group =>
+                {
+                    var blocsk = group.Select(y => y.block).ToArray();
+                    var wrapper = new SoureReferenceBlock(blocsk, group.Key);
+                    return wrapper;
+                });
+
+                var newDoc = documents.First().Value.GetBuilder().Build();
+                newDoc.Blocks = referenceBlocks.ToArray();
+                var firstBlock = newDoc.Blocks.First();
+
+                while (firstBlock is SoureReferenceBlock reference)
+                    firstBlock = reference.Blocks.First();
+
+                string chapterName;
+                if (firstBlock is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
+                    chapterName = chapterheaderBlock.ChapterId;
+                if (firstBlock is HeaderBlock headerBlock)
+                    chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
+                else
+                    chapterName = StichStage<TItemCache, TCache>.NoChapterName;
+
+                return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
+            }).ToArray();
+        }
+
+        private static List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> GetChaptersInPartitions(bool takeFirstWithoutChapter, bool takeLastChapter, IDocument<MarkdownDocument>[] documents)
+        {
+            var listOfChaptersInPartition = new List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>>();
+
+            List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>? currentList = null;
+
+            if (takeFirstWithoutChapter)
+            {
+                currentList = new List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>();
+                listOfChaptersInPartition.Add(currentList);
+            }
+
+            for (int j = 0; j < documents.Length; j++)
+            {
+                var currentDocument = documents[j];
+                foreach (var block in currentDocument.Value.Blocks)
+                {
+                    if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
+                        currentList.Add((currentDocument, block));
+
+                    else if (block is HeaderBlock header && header.HeaderLevel == 1
+                        && (j != documents.Length - 1 // the last block is also the first of the nex partition
+                            || takeLastChapter)) // we don't want to have (double) unless its the last partition.
+                    {
+                        currentList = new List<(IDocument<MarkdownDocument>, MarkdownBlock)>();
+                        listOfChaptersInPartition.Add(currentList);
+                        currentList.Add((currentDocument, block));
+                    }
+                    else if (block is HeaderBlock header__ && header__.HeaderLevel == 1
+                        && j == documents.Length - 1)
+                    {
+                        // we wan't to break the for not foreach, but we are alreary in the last for loop.
+                        break; // so this is enough
+                    }
+                }
+
+            }
+
+            return listOfChaptersInPartition;
+        }
 
 
         private bool ContainsChapters(IList<MarkdownBlock> blocks)
@@ -548,6 +483,7 @@ namespace Nota.Site.Generator
 
         public Partition[] Partitions { get; set; }
     }
+
 }
 
 namespace Nota.Site.Generator
@@ -558,7 +494,7 @@ namespace Nota.Site.Generator
         where TListItemCache : class
         where TListCache : class
         {
-            return new StichStage<TListItemCache, TListCache>(input.DoIt, input.Context, name);
+            return new StichStage<TListItemCache, TListCache>(input, input.Context, name);
         }
     }
 }

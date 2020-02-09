@@ -14,16 +14,17 @@ namespace Nota.Site.Generator
             switch (block)
             {
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
-                    builder.Append($"<div class=\"{sourceReferenceBlock.OriginalDocument.Id}\">");
+                    builder.Append($"<div class=\"edit-box\"><div class=\"edit-lable\"><a href=\"{sourceReferenceBlock.OriginalDocument.Id}\" >Bearbeiten</a></div>");
                     this.Render(builder, sourceReferenceBlock.Blocks);
                     builder.Append("</div>");
 
                     break;
 
                 case Markdown.Blocks.SideNote blocks:
-                    builder.Append($"<div id=\"{blocks.Id}\" class=\"{blocks.SideNoteType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
+                    builder.Append($"<aside id=\"{blocks.Id}\" class=\"{blocks.SideNoteType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
+                    builder.Append($"<h1>{blocks.SideNoteType}</h1>");
                     this.Render(builder, blocks.Blocks);
-                    builder.Append("</div>");
+                    builder.Append("</aside>");
 
                     break;
 

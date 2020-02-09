@@ -65,9 +65,20 @@ namespace Nota.Site.Generator
                 .FileSystem("Layout Filesystem")
                 .FileProvider("Layout", "Layout FIle Provider");
 
-            var staticFiles = configFile
+            var staticFilesInput = configFile
                 .Transform(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"))
                 .FileSystem("static Filesystem");
+
+            var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss")
+                .Select(x => x.ToText());
+           var transformedSass=  sassFiles.Select(sassFiles, (x1, x2) =>
+                x1.Sass(x2)
+                .TextToStream());
+
+            var staticFiles = staticFilesInput
+                .Where(x => Path.GetExtension(x.Id) != ".scss")
+                .Concat(transformedSass,"");
+
 
 
             var generatorOptions = new GenerationOptions()
@@ -88,6 +99,7 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
+                //.Where(x => true)
                 .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
                 .SelectMany(input =>
                 {
@@ -176,6 +188,7 @@ namespace Nota.Site.Generator
 
                     var result = grouped
                         .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                            .FormatXml()
                             .TextToStream(), "Markdown All")
                         .Merge(books, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<BookMetadata[]>())));
 
@@ -232,7 +245,7 @@ namespace Nota.Site.Generator
 
                     return books;
                 }, "Generating MetadataBooks")
-                .ListToSingle(input => 
+                .ListToSingle(input =>
                 {
                     var siteMetadata = new SiteMetadata()
                     {

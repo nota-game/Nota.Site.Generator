@@ -11,7 +11,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
         where TCache : class
         where T : class
     {
-        public YamlMarkdownToDocumentMetadataStage(StagePerformHandler<MarkdownDocument, TCache> inputSingle0, IGeneratorContext context, string? name) : base(inputSingle0, context, name)
+        public YamlMarkdownToDocumentMetadataStage(StageBase<MarkdownDocument, TCache> inputSingle0, IGeneratorContext context, string? name) : base(inputSingle0, context, name)
         {
         }
 
@@ -53,7 +53,7 @@ namespace Nota.Site.Generator
             public YamlMarkdownToDocumentMetadataStage<T, TCache> For<T>()
                 where T : class
             {
-                return new YamlMarkdownToDocumentMetadataStage<T, TCache>(this.input.DoIt, this.input.Context, this.name);
+                return new YamlMarkdownToDocumentMetadataStage<T, TCache>(this.input, this.input.Context, this.name);
             }
         }
     }

@@ -55,20 +55,6 @@ namespace Nota.Site.Generator.Markdown.Blocks
         }
 
     }
-
-    public class SoureReferenceBlock : MarkdownBlock
-    {
-        public SoureReferenceBlock(IList<MarkdownBlock> blocks, IDocument<MarkdownDocument> originalDocument)
-        {
-            this.Blocks = blocks ?? throw new ArgumentNullException(nameof(blocks));
-            this.OriginalDocument = originalDocument ?? throw new ArgumentNullException(nameof(originalDocument));
-        }
-
-        public IList<MarkdownBlock> Blocks { get; set; }
-
-        public IDocument<MarkdownDocument> OriginalDocument { get; set; }
-
-    }
     public class InserBlockResolver
     {
         private readonly string relativeTo;
@@ -253,7 +239,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
         where TListItemCache : class
         where TListCache : class
     {
-        public InsertMarkdownStage(StagePerformHandler<MarkdownDocument, TSingleCache> inputSingle0, StagePerformHandler<MarkdownDocument, TListItemCache, TListCache> inputList0, IGeneratorContext context, string? name) : base(inputSingle0, inputList0, context, name)
+        public InsertMarkdownStage(StageBase<MarkdownDocument, TSingleCache> inputSingle0, MultiStageBase<MarkdownDocument, TListItemCache, TListCache> inputList0, IGeneratorContext context, string? name) : base(inputSingle0, inputList0, context, name)
         {
         }
 
@@ -278,7 +264,7 @@ namespace Nota.Site.Generator
         where TListItemCache : class
         where TListCache : class
         {
-            return new InsertMarkdownStage<TSingleCache, TListItemCache, TListCache>(input.DoIt, allDocuments.DoIt, input.Context, name);
+            return new InsertMarkdownStage<TSingleCache, TListItemCache, TListCache>(input, allDocuments, input.Context, name);
         }
     }
 }
