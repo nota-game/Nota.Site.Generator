@@ -18,6 +18,13 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         public IDocument<MarkdownDocument> OriginalDocument { get; set; }
 
+        public override string ToString()
+        {
+
+            return $"~[{this.OriginalDocument.Id}]\n" + string.Join("\n\n", this.Blocks);
+
+        }
+
     }
 
 

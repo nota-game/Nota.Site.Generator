@@ -115,7 +115,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
             }
 
             builder.AppendLine("|---");
-            var splitter = new LineSplitter(this.Blocks.ToString());
+            var splitter = new LineSplitter(string.Join("\n\n", this.Blocks));
             while (splitter.TryGetNextLine(out var line, out _, out _))
             {
                 WriteLine(line);
@@ -168,10 +168,11 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 lineFeedStart = this.text[this.currentIndex..].IndexOf('\n');
                 if (lineFeedStart == -1)
                 {
-                    line = ReadOnlySpan<char>.Empty;
-                    lineStart = -1;
-                    lineEnd = -1;
-                    return false;
+                    line = this.text[this.currentIndex..];
+                    lineStart = this.currentIndex;
+                    lineEnd = this.currentIndex + line.Length;
+                    this.currentIndex = lineEnd;
+                    return true;
                 }
                 int lineFeedEnd = lineFeedStart;
             }
