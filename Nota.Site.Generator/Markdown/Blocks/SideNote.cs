@@ -193,8 +193,8 @@ namespace Nota.Site.Generator.Markdown.Blocks
     public enum SideNoteType
     {
         Undefined,
-        Beispiel,
-        SpielleiterInformation,
+        Sample,
+        GameMaster,
         Optional,
         Information,
     }
