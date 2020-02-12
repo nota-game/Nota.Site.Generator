@@ -71,13 +71,13 @@ namespace Nota.Site.Generator
 
             var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss")
                 .Select(x => x.ToText());
-           var transformedSass=  sassFiles.Select(sassFiles, (x1, x2) =>
-                x1.Sass(x2)
-                .TextToStream());
+            var transformedSass = sassFiles.Select(sassFiles, (x1, x2) =>
+                 x1.Sass(x2)
+                 .TextToStream());
 
             var staticFiles = staticFilesInput
                 .Where(x => Path.GetExtension(x.Id) != ".scss")
-                .Concat(transformedSass,"");
+                .Concat(transformedSass, "");
 
 
 
@@ -99,7 +99,7 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
-                //.Where(x => true)
+                .Where(x => true)
                 .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
                 .SelectMany(input =>
                 {
@@ -444,13 +444,22 @@ namespace Nota.Site.Generator
 
                 var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
 
-                if (status.IsDirty)
-                {
-                    var currentCommit = repo.Head.Tip;
-                    repo.Reset(LibGit2Sharp.ResetMode.Hard, currentCommit);
-                }
+                //if (status.IsDirty)
+                //{
+                //    var currentCommit = repo.Head.Tip;
+                //    repo.Reset(LibGit2Sharp.ResetMode.Hard, currentCommit);
 
-                LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() { MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
+                //}
+
+                var remote = repo.Network.Remotes["origin"];
+                var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
+
+
+                var originMaster = repo.Branches["origin/master"];
+                repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
+
+                //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
 
             }
             else
