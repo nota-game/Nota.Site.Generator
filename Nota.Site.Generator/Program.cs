@@ -16,13 +16,13 @@ namespace Nota.Site.Generator
 {
     class Program
     {
-
+        private static IWebHost? host;
 
         /// <summary>
         /// The Main Method
         /// </summary>
         /// <param name="configuration">Path to the configuration file (json)</param>
-        static async Task Main(FileInfo? configuration = null)
+        static async Task Main(FileInfo? configuration = null, bool serve = false)
         {
             configuration ??= new FileInfo("config.json");
 
@@ -49,6 +49,30 @@ namespace Nota.Site.Generator
 
             using var repo = PreGit(context, config, author, workdirPath, cache, output);
 
+            if (server)
+            {
+                var workingDir = new DirectoryInfo(workdirPath);
+                host = new WebHostBuilder()
+                .UseKestrel()
+                .UseWebRoot(directory.FullName)
+                .ConfigureServices(services =>
+                {
+                    services.AddLiveReload();
+                })
+                .Configure(app =>
+                {
+                    app.UseLiveReload();
+                    app.UseStaticFiles();
+                })
+                .Build();
+                await host.StartAsync();
+
+                var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+                foreach (var item in feature.Addresses)
+                    Console.WriteLine($"Listinging to: {item}");
+
+
+            }
 
 
             var contentRepo = configFile
@@ -302,13 +326,43 @@ namespace Nota.Site.Generator
                 .Persist(new DirectoryInfo(output), generatorOptions)
                 ;
 
-            await g.UpdateFiles().ConfigureAwait(false);
+            if (host != null)
+            {
 
-            PostGit(author, committer, repo, workdirPath, cache, output);
+                s.Stop();
+                context.Logger.Info($"Preperation Took {s.Elapsed}");
 
-            s.Stop();
+                bool isRunning = true;
 
-            context.Logger.Info($"Operation Took {s.Elapsed}");
+                Console.CancelKeyPress += (sender, e) => isRunning = false;
+
+                while (isRunning)
+                {
+                    s.Restart();
+                    await g.UpdateFiles().ConfigureAwait(false);
+                    s.Stop();
+                    context.Logger.Info($"Update Took {s.Elapsed}");
+
+                    Console.WriteLine("Press Q to Quit, any OTHER key to update.");
+                    var key = Console.ReadKey(true);
+                    if (key.Key == ConsoleKey.Q)
+                        isRunning = false;
+                }
+                s.Restart();
+                await host.StopAsync();
+                PostGit(author, committer, repo, workdirPath, cache, output);
+                s.Stop();
+                context.Logger.Info($"Finishing took {s.Elapsed}");
+
+            }
+            else
+            {
+                await g.UpdateFiles().ConfigureAwait(false);
+                PostGit(author, committer, repo, workdirPath, cache, output);
+                s.Stop();
+                context.Logger.Info($"Operation Took {s.Elapsed}");
+            }
+
         }
 
         private static TableOfContents GenerateContentsTable(ImmutableList<IDocument<MarkdownDocument>> documents)

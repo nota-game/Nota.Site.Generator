@@ -24,6 +24,12 @@
     <PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha0125" />
     <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha0125" />
     <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20054.1" />
+  
+  <!-- Kerstil -->
+    <PackageReference Include="Microsoft.AspNetCore.Routing" Version="2.2.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Server.Kestrel" Version="2.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.2.0" />
+    <PackageReference Include="Westwind.AspnetCore.LiveReload" Version="0.1.12" />
   </ItemGroup>
 
 </Project>
