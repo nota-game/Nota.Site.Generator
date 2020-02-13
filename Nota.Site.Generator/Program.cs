@@ -1,4 +1,6 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Toolkit.Parsers.Markdown;
 using Microsoft.Toolkit.Parsers.Markdown.Blocks;
 using Stasistium;
 using Stasistium.Documents;
@@ -8,7 +10,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-
+using Westwind.AspNetCore.LiveReload;
 using Blocks = Microsoft.Toolkit.Parsers.Markdown.Blocks;
 using Inlines = Microsoft.Toolkit.Parsers.Markdown.Inlines;
 
@@ -36,7 +38,7 @@ namespace Nota.Site.Generator
              .Json("Parse Configuration")
              .For<Config>();
 
-            var config = (await (await configFile.DoIt(null, new GenerationOptions().Token)).Perform).Value;
+            var config = (await (await configFile.DoIt(null, new GenerationOptions() { Refresh = false }.Token)).Perform).Value;
 
             // Create the committer's signature and commit
             var author = new LibGit2Sharp.Signature("NotaSiteGenerator", "@NotaSiteGenerator", DateTime.Now);
@@ -49,12 +51,12 @@ namespace Nota.Site.Generator
 
             using var repo = PreGit(context, config, author, workdirPath, cache, output);
 
-            if (server)
+            if (serve)
             {
-                var workingDir = new DirectoryInfo(workdirPath);
+                var workingDir = new DirectoryInfo(output);
                 host = new WebHostBuilder()
                 .UseKestrel()
-                .UseWebRoot(directory.FullName)
+                .UseWebRoot(workingDir.FullName)
                 .ConfigureServices(services =>
                 {
                     services.AddLiveReload();
