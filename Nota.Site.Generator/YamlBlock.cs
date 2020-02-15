@@ -45,5 +45,14 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 }
             }
         }
+
+        public override string ToString()
+        {
+            var serelizer = new YamlDotNet.Serialization.SerializerBuilder()
+                .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.CamelCaseNamingConvention.Instance)
+                .Build();
+
+            return serelizer.Serialize(Data);
+        }
     }
 }
