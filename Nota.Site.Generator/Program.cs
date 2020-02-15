@@ -98,15 +98,32 @@ namespace Nota.Site.Generator
                 .Transform(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"), "Static FIle from Config")
                 .FileSystem("static Filesystem");
 
+
             var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
                 .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
-            var transformedSass = sassFiles.Select(sassFiles, (x1, x2) =>
-                 x1.Sass(x2, "compile SASS")
-                 .TextToStream("scss back to stream"));
 
             var staticFiles = staticFilesInput
-                .Where(x => Path.GetExtension(x.Id) != ".scss")
-                .Concat(transformedSass, "Concat scss with other files");
+                   // HACK: Adding the hash of all sassFiles to the documents will ensure that when any sass file changes all other sass file will also have changes flaged.
+                   .Merge(sassFiles.ListToSingle(x => context.Create("", string.Join("|", x.Select(y => y.Hash)), "id")), (doc, v) => doc.With(doc.Metadata.Add(v)))
+                   .Select(input =>
+                   input.If(x => Path.GetExtension(x.Id) == ".scss")
+                   .Then(x =>
+                       x.ToText()
+                       .Sass(sassFiles)
+                       .TextToStream())
+                   .Else(x => x))
+                   // We wan't to remove the hack from before. 1. We (hopefully not) want to use it again, and prevent unnessary changes.
+                   .Transform(x => x.With(x.Metadata.Remove<IDocument<string>>()))
+                   ;
+
+
+            //var transformedSass = sassFiles.Select(sassFiles, (x1, x2) =>
+            //     x1.Sass(x2, "compile SASS")
+            //     .TextToStream("scss back to stream"));
+
+            //var staticFiles = staticFilesInput
+            //    .Where(x => Path.GetExtension(x.Id) != ".scss")
+            //    .Concat(transformedSass, "Concat scss with other files");
 
 
 
