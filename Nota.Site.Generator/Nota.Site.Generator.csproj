@@ -16,20 +16,19 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha0126" />
-    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha0126" />
-    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha0126" />
-    <PackageReference Include="Stasistium.Office" Version="0.1.0-alpha0126" />
-    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha0126" />
-    <PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha0126" />
-    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha0126" />
+    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha0129" />
+    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha0129" />
+    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha0129" />
+    <PackageReference Include="Stasistium.Office" Version="0.1.0-alpha0129" />
+    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha0129" />
+    <PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha0129" />
+    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha0129" />
     <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20104.2" />
   
   <!-- Kerstil -->
-    <PackageReference Include="Microsoft.AspNetCore.Routing" Version="2.2.2" />
-    <PackageReference Include="Microsoft.AspNetCore.Server.Kestrel" Version="2.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.StaticFiles" Version="2.2.0" />
     <PackageReference Include="Westwind.AspnetCore.LiveReload" Version="0.1.12" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
   </ItemGroup>
 
 </Project>

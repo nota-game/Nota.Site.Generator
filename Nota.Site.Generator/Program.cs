@@ -26,6 +26,12 @@ namespace Nota.Site.Generator
         /// <param name="configuration">Path to the configuration file (json)</param>
         static async Task Main(FileInfo? configuration = null, bool serve = false)
         {
+
+            const string workdirPath = "gitOut";
+            const string cache = "cache";
+            const string output = "out";
+
+
             configuration ??= new FileInfo("config.json");
 
             if (!configuration.Exists)
@@ -45,17 +51,16 @@ namespace Nota.Site.Generator
             var committer = author;
 
 
-            const string workdirPath = "gitOut";
-            const string cache = "cache";
-            const string output = "out";
 
             using var repo = PreGit(context, config, author, workdirPath, cache, output);
 
             if (serve)
             {
                 var workingDir = new DirectoryInfo(output);
+                workingDir.Create();
                 host = new WebHostBuilder()
                 .UseKestrel()
+                .UseContentRoot(workingDir.FullName)
                 .UseWebRoot(workingDir.FullName)
                 .ConfigureServices(services =>
                 {
@@ -72,8 +77,6 @@ namespace Nota.Site.Generator
                 var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
                 foreach (var item in feature.Addresses)
                     Console.WriteLine($"Listinging to: {item}");
-
-
             }
 
 
@@ -83,27 +86,27 @@ namespace Nota.Site.Generator
 
             var schemaRepo = configFile
                 .Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
-                .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
+                    .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                 .GitModul("Git for Schema");
 
             var layoutProvider = configFile
-                .Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"))
+                .Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"), "Transform LayoutProvider from Config")
                 .FileSystem("Layout Filesystem")
                 .FileProvider("Layout", "Layout FIle Provider");
 
             var staticFilesInput = configFile
-                .Transform(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"))
+                .Transform(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"), "Static FIle from Config")
                 .FileSystem("static Filesystem");
 
-            var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss")
-                .Select(x => x.ToText());
+            var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
+                .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
             var transformedSass = sassFiles.Select(sassFiles, (x1, x2) =>
-                 x1.Sass(x2)
-                 .TextToStream());
+                 x1.Sass(x2, "compile SASS")
+                 .TextToStream("scss back to stream"));
 
             var staticFiles = staticFilesInput
                 .Where(x => Path.GetExtension(x.Id) != ".scss")
-                .Concat(transformedSass, "");
+                .Concat(transformedSass, "Concat scss with other files");
 
 
 
@@ -114,18 +117,52 @@ namespace Nota.Site.Generator
             };
             var s = System.Diagnostics.Stopwatch.StartNew();
 
-            var contentVersions = contentRepo.Transform(input =>
-            {
-                var gitData = new GitMetadata(input.Value);
-                string version = gitData.CalculatedVersion;
-                return input.With(version, version).WithId(version);
-            })
-                .OrderBy(x => new VersionComparer(x.Id))
-                .ListToSingle(x => context.Create("", "", "ContentVersions", context.EmptyMetadata.Add(new ContentVersions(x.Select(x => x.Value)))));
+
+
+            var siteData = contentRepo
+                .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()), "Remove GitReposetoryMetadata form content for siteData")
+                .SelectMany(input =>
+                {
+                    var startData = input
+                    .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
+                    .GitRefToFiles("Read Files from Git (Content)")
+                        .Sidecar()
+                            .For<BookMetadata>(".metadata")
+                        ;
+
+                    var books = startData.Where(x => x.Id.EndsWith("/.bookdata"), "only bookdata")
+                        .Select(input2 =>
+                            input2.Markdown(GenerateMarkdownDocument, "siteData markdown")
+                            .YamlMarkdownToDocumentMetadata("sitedata YamlMarkdown")
+                                .For<BookMetadata>()
+                            .Transform(x =>
+                            {
+                                var startIndex = x.Id.IndexOf('/') + 1;
+                                var endIndex = x.Id.IndexOf('/', startIndex);
+                                var key = x.Id[startIndex..endIndex];
+
+                                var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString(), key);
+
+                                return ArgumentBookMetadata(x, location)
+                                    .WithId(location);
+                            }))
+                        .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null, "filter book in sitedata without Bookdata");
+
+                    return books;
+                }, "Generating MetadataBooks")
+                .ListToSingle(input =>
+                {
+                    var siteMetadata = new SiteMetadata()
+                    {
+                        Books = input.Select(x => x.Metadata.GetValue<BookMetadata>()).ToArray()
+                    };
+                    return context.Create(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
+                }, "make siteData to single element");
+
 
 
             var files = contentRepo
-                .Where(x => true)
+                //.Where(x => true)
                 .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
                 .SelectMany(input =>
                 {
@@ -173,114 +210,37 @@ namespace Nota.Site.Generator
 
                         var stiched = inserted.Stich("stich")
                             .Transform(x => x.WithId($"{key}/{x.Id}"))
-                            .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.GetValue<BookMetadata>())));
+                            .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>())))
+                            .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
 
-                        var chapters = stiched.ListToSingle(x => x.First().Context.Create(string.Empty, string.Empty, "chapters", x.First().Context.EmptyMetadata.Add(GenerateContentsTable(x))));
+                        var chapters = stiched.ListToSingle(x => context.Create(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
 
                         var stichedWithContentsTable = stiched.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)));
 
-                        return stichedWithContentsTable;
-                    });
+                        var changedDocuments = stichedWithContentsTable.Select(y => y.Transform(x =>
+                        {
+                            var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString());
+                            var bookPath = NotaPath.Combine(prefix, key);
+                            var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
+                            return changedDocument;
+                        }));
 
-                    var books = startData.Where(x => x.Id.StartsWith("books/")).GroupBy
-                       (x =>
-                       {
-                           var startIndex = x.Id.IndexOf('/') + 1;
-                           var endIndex = x.Id.IndexOf('/', startIndex);
-                           return x.Id[startIndex..endIndex];
-                       }
+                        return changedDocuments;
+                    }, "Group by for files");
 
-                   , (input, key) =>
-                   {
-
-                       var bookData = input.Where(x => x.Id == $"books/{key}/.bookdata")
-                           .SingleEntry()
-                           .Markdown(GenerateMarkdownDocument)
-                           .YamlMarkdownToDocumentMetadata()
-                               .For<BookMetadata>()
-                            .Transform(x =>
-                                    x.With(x.Metadata
-                                        .AddOrUpdate(new BookMetadata() { Location = key }, (oldValue, newValue) => oldValue.WithLocation(newValue.Location))));
-
-
-                       return bookData.Concat();
-                   })
-                       .ListToSingle(input =>
-                       {
-                           var document = input.First().Context.Create(string.Empty, string.Empty, "allBooks");
-                           return document.With(document.Metadata.Add(input.Select(x => x.Metadata.GetValue<BookMetadata>()!).ToArray()));
-                       });
 
 
                     var result = grouped
                         .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
                             .FormatXml()
-                            .TextToStream(), "Markdown All")
-                        .Merge(books, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<BookMetadata[]>())));
+                            .TextToStream(), "Markdown All");
 
 
                     return result;
                 }, "Working on content branches")
-                .Select(x => x.Transform(x =>
-                {
-                    var prefix = Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion).Replace('\\', '/');
-
-                    var changedDocument = x.WithId(Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, x.Id).Replace('\\', '/'))
-                            .With(x.Metadata
-                                .AddOrUpdate(new BookMetadata() { Location = prefix }, (oldValue, newValue) => oldValue.WithLocation(newValue.Location))
-                                .AddOrUpdate(new[] { new BookMetadata() { Location = prefix } }, (oldValue, newValue) => oldValue.Select(y => y.WithLocation(newValue[0].Location + "/" + y.Location)).ToArray())
-                                );
-                    return changedDocument;
-                }
-
-                    , "Content Id Change"))
-
-                //.SelectMany(x=>
-                //                x.GitRefToFiles("Read Files from Git (Content)"))
-
-                .Merge(contentVersions, (x1, x2) => x1.With(x1.Metadata.Add(x2.Metadata.GetValue<ContentVersions>() ?? throw new InvalidOperationException("Should Not Happen"))))
-                .Transform(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })));
-
-            var siteData = contentRepo
-                .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
-                .SelectMany(input =>
-                {
-                    var startData = input
-                    .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-                    .GitRefToFiles("Read Files from Git (Content)")
-                        .Sidecar()
-                            .For<BookMetadata>(".metadata")
-                        ;
-
-                    var books = startData.Where(x => x.Id.EndsWith("/.bookdata"))
-                        .Select(input2 =>
-                            input2.Markdown(GenerateMarkdownDocument)
-                            .YamlMarkdownToDocumentMetadata()
-                                .For<BookMetadata>()
-                            .Transform(x =>
-                            {
-                                var startIndex = x.Id.IndexOf('/') + 1;
-                                var endIndex = x.Id.IndexOf('/', startIndex);
-                                var key = x.Id[startIndex..endIndex];
-
-                                var location = Path.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion, key).Replace('\\', '/');
-
-                                return x.With(x.Metadata
-                                .AddOrUpdate(new BookMetadata() { Location = location }, (oldValue, newValue) => oldValue.WithLocation(newValue.Location)));
-                            }));
-
-                    return books;
-                }, "Generating MetadataBooks")
-                .ListToSingle(input =>
-                {
-                    var siteMetadata = new SiteMetadata()
-                    {
-                        Books = input.Select(x => x.Metadata.GetValue<BookMetadata>()).ToArray()
-                    };
-                    var context = input.First().Context;
-                    return context.Create(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
-                });
-
+                .Transform(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
+                .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
+                ;
 
 
 
@@ -340,10 +300,20 @@ namespace Nota.Site.Generator
 
                 while (isRunning)
                 {
-                    s.Restart();
-                    await g.UpdateFiles().ConfigureAwait(false);
-                    s.Stop();
-                    context.Logger.Info($"Update Took {s.Elapsed}");
+                    try
+                    {
+                        Console.Clear();
+                        s.Restart();
+                        await g.UpdateFiles().ConfigureAwait(false);
+                        s.Stop();
+                        context.Logger.Info($"Update Took {s.Elapsed}");
+                    }
+                    catch (Exception e)
+                    {
+
+                        Console.WriteLine("Error");
+                        Console.Error.WriteLine(e);
+                    }
 
                     Console.WriteLine("Press Q to Quit, any OTHER key to update.");
                     var key = Console.ReadKey(true);
@@ -365,6 +335,21 @@ namespace Nota.Site.Generator
                 context.Logger.Info($"Operation Took {s.Elapsed}");
             }
 
+        }
+
+        private static IDocument<T> ArgumentBookMetadata<T>(IDocument<T> x, string location)
+            where T : class
+        {
+            var newMetadata = x.Metadata.TryGetValue<BookMetadata>();
+            if (newMetadata is null)
+                return x;
+            newMetadata = newMetadata.WithLocation(location);
+
+            var gitdata = x.Metadata.TryGetValue<GitMetadata>();
+            if (gitdata != null)
+                newMetadata = newMetadata.WithVersion(gitdata.CalculatedVersion);
+
+            return x.With(x.Metadata.AddOrUpdate(newMetadata));
         }
 
         private static TableOfContents GenerateContentsTable(ImmutableList<IDocument<MarkdownDocument>> documents)
@@ -576,16 +561,20 @@ namespace Nota.Site.Generator
             }
         }
 
-        private class ContentVersions
-        {
-            private IEnumerable<string> enumerable;
-
-            public ContentVersions(IEnumerable<string> enumerable)
-            {
-                this.enumerable = enumerable;
-            }
-        }
     }
+
+    public class ContentVersions
+    {
+        private readonly IEnumerable<BookVersion> enumerable;
+
+        public ContentVersions(IEnumerable<BookVersion> enumerable)
+        {
+            this.enumerable = enumerable.ToArray();
+        }
+
+        public IEnumerable<BookVersion> Versions => this.enumerable;
+    }
+
 
     public class Config
     {
@@ -615,30 +604,116 @@ namespace Nota.Site.Generator
         public string Name { get; }
         public GitRefType Type { get; }
 
-        public string CalculatedVersion
+        public BookVersion CalculatedVersion
         {
             get
             {
-                string version;
+                BookVersion version;
                 if (this.Type == GitRefType.Branch && this.Name == "master")
-                    version = "vNext";
+                    version = BookVersion.VNext;
                 else if (this.Type == GitRefType.Branch)
-                    version = "draft/" + this.Name;
+                    version = new BookVersion(true, this.Name);
                 else
-                    version = this.Name;
+                    version = new BookVersion(false, this.Name);
                 return version;
             }
         }
 
     }
 
+    public enum BookType : byte
+    {
+        Undefined = 0,
+        Rule = 1,
+        Source = 2,
+        Story = 3,
+    }
+
+    public static class BookTypeExtension
+    {
+        public static string ToId(this BookType bookType) => bookType switch
+        {
+            BookType.Undefined => "UNDEFINED",
+            BookType.Rule => "R",
+            BookType.Source => "Q",
+            BookType.Story => "A",
+            _ => "UNKNOWN"
+        };
+    }
+
     public class BookMetadata
     {
-        public string Title { get; set; }
-        public int Chapter { get; set; }
-        public string Location { get; set; }
+        public BookMetadata()
+        {
 
-        public BookMetadata WithLocation(string location) => new BookMetadata() { Title = this.Title, Chapter = this.Chapter, Location = location };
+        }
+        public BookMetadata(string? location = null, string? beginning = null, BookVersion version = default)
+        {
+            this.Location = location;
+            this.Beginning = beginning;
+            this.Version = version;
+        }
+
+        // From file
+        /// <summary>
+        /// The Title of the book
+        /// </summary>
+        public string Title { get; set; }
+        /// <summary>
+        /// The Number of the book.
+        /// </summary>
+        public uint Number { get; set; }
+        /// <summary>
+        /// The Id of the cover
+        /// </summary>
+        public string Cover { get; set; }
+        /// <summary>
+        /// The type of book
+        /// </summary>
+        public BookType BookType { get; set; }
+        /// <summary>
+        /// An optional abbreviation.
+        /// </summary>
+        public string? Abbr { get; set; }
+        /// <summary>
+        /// The Abstract of this book formated as markdown
+        /// </summary>
+        public string Abstract { get; set; }
+
+
+        // Generated
+        public string? Location { get; }
+        public string? Beginning { get; }
+        public BookVersion Version { get; }
+
+
+        public BookMetadata WithLocation(string location) => new BookMetadata(location, this.Beginning, this.Version)
+        {
+            Title = this.Title,
+            Number = this.Number,
+            Cover = this.Cover,
+            BookType = this.BookType,
+            Abbr = this.Abbr,
+            Abstract = this.Abstract,
+        };
+        public BookMetadata WithBeginning(string beginning) => new BookMetadata(this.Location, beginning, this.Version)
+        {
+            Title = this.Title,
+            Number = this.Number,
+            Cover = this.Cover,
+            BookType = this.BookType,
+            Abbr = this.Abbr,
+            Abstract = this.Abstract,
+        };
+        public BookMetadata WithVersion(BookVersion version) => new BookMetadata(this.Location, this.Beginning, version)
+        {
+            Title = this.Title,
+            Number = this.Number,
+            Cover = this.Cover,
+            BookType = this.BookType,
+            Abbr = this.Abbr,
+            Abstract = this.Abstract,
+        };
     }
 
     internal class HostMetadata
