@@ -7,8 +7,6 @@ using System.Text;
 using System.Linq;
 using Microsoft.Toolkit.Parsers.Markdown.Inlines;
 using Stasistium.Documents;
-using System.Threading.Tasks;
-using System.Collections.Immutable;
 using Stasistium.Stages;
 using Stasistium;
 using Nota.Site.Generator.Markdown.Blocks;
@@ -57,28 +55,16 @@ namespace Nota.Site.Generator.Markdown.Blocks
     }
     public class InserBlockResolver
     {
-        private readonly string relativeTo;
         private readonly Dictionary<string, IDocument<MarkdownDocument>> lookup;
+        private readonly RelativePathResolver resolver;
 
-        public InserBlockResolver(IDocument relativeTo, IEnumerable<IDocument<MarkdownDocument>> documents, IGeneratorContext context)
+        public InserBlockResolver(RelativePathResolver resolver, IEnumerable<IDocument<MarkdownDocument>> documents, IGeneratorContext context)
         {
-            this.relativeTo = relativeTo.Id;
-            this.lookup = documents.SelectMany(this.GetPathes).ToDictionary(x => x.id, x => x.document);
+            this.lookup = documents.ToDictionary(x => x.Id);
+            this.resolver = resolver;
             this.Context = context;
         }
 
-        private IEnumerable<(string id, IDocument<MarkdownDocument> document)> GetPathes(IDocument<MarkdownDocument> document)
-        {
-            yield return ("/" + document.Id, document);
-
-            var currentFolder = System.IO.Path.GetDirectoryName(this.relativeTo)?.Replace('\\', '/');
-            if (currentFolder is null)
-                yield break;
-            if (!currentFolder.EndsWith('/'))
-                currentFolder += '/';
-            if (document.Id.StartsWith(currentFolder))
-                yield return (document.Id.Substring(currentFolder.Length), document);
-        }
 
         public IGeneratorContext Context { get; }
 
@@ -148,7 +134,8 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
                 case InsertBlock insertBlock:
                     {
-                        if (!this.lookup.TryGetValue(insertBlock.Reference, out var referencedDocument))
+                        var id = this.resolver[insertBlock.Reference];
+                        if (id == null || !this.lookup.TryGetValue(id, out var referencedDocument))
                             throw this.Context.Exception($"Could not find referenced document {insertBlock.Reference}");
 
                         return new SoureReferenceBlock(this.DeepCopy(referencedDocument.Value.Blocks), referencedDocument);
@@ -234,37 +221,6 @@ namespace Nota.Site.Generator.Markdown.Blocks
     }
 
 
-    public class InsertMarkdownStage<TSingleCache, TListItemCache, TListCache> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List1StageBase<MarkdownDocument, TSingleCache, MarkdownDocument, TListItemCache, TListCache, MarkdownDocument>
-        where TSingleCache : class
-        where TListItemCache : class
-        where TListCache : class
-    {
-        public InsertMarkdownStage(StageBase<MarkdownDocument, TSingleCache> inputSingle0, MultiStageBase<MarkdownDocument, TListItemCache, TListCache> inputList0, IGeneratorContext context, string? name) : base(inputSingle0, inputList0, context, name)
-        {
-        }
-
-        protected override Task<IDocument<MarkdownDocument>> Work(IDocument<MarkdownDocument> inputSingle0, ImmutableList<IDocument<MarkdownDocument>> inputList0, OptionToken options)
-        {
-            var resolver = new InserBlockResolver(inputSingle0, inputList0, this.Context);
-
-            var resolvedDocument = resolver.Resolve(inputSingle0.Value);
-
-            return Task.FromResult(inputSingle0.With(resolvedDocument, this.Context.GetHashForString(resolvedDocument.ToString())));
-        }
-    }
-
-
 }
-namespace Nota.Site.Generator
-{
-    public static partial class StageExtensions
-    {
-        public static InsertMarkdownStage<TSingleCache, TListItemCache, TListCache> InsertMarkdown<TSingleCache, TListItemCache, TListCache>(this StageBase<MarkdownDocument, TSingleCache> input, MultiStageBase<MarkdownDocument, TListItemCache, TListCache> allDocuments, string? name = null)
-        where TSingleCache : class
-        where TListItemCache : class
-        where TListCache : class
-        {
-            return new InsertMarkdownStage<TSingleCache, TListItemCache, TListCache>(input, allDocuments, input.Context, name);
-        }
-    }
-}
+
+

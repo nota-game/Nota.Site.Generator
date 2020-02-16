@@ -20,6 +20,14 @@ namespace Nota.Site.Generator
     {
         private static IWebHost? host;
 
+
+        private static readonly string[] MarkdownExtensions = { ".md", ".xslx" };
+
+        private static bool IsMarkdown(IDocument document)
+        {
+            return MarkdownExtensions.Any(x => Path.GetExtension(document.Id) == x);
+        }
+
         /// <summary>
         /// The Main Method
         /// </summary>
@@ -116,17 +124,6 @@ namespace Nota.Site.Generator
                    .Transform(x => x.With(x.Metadata.Remove<IDocument<string>>()))
                    ;
 
-
-            //var transformedSass = sassFiles.Select(sassFiles, (x1, x2) =>
-            //     x1.Sass(x2, "compile SASS")
-            //     .TextToStream("scss back to stream"));
-
-            //var staticFiles = staticFilesInput
-            //    .Where(x => Path.GetExtension(x.Id) != ".scss")
-            //    .Concat(transformedSass, "Concat scss with other files");
-
-
-
             var generatorOptions = new GenerationOptions()
             {
                 CompressCache = false,
@@ -199,44 +196,55 @@ namespace Nota.Site.Generator
                             return x.Id[startIndex..endIndex];
                         }
 
-                    , (input, key) =>
+                    , (inputOriginal, key) =>
                     {
+                        var input = inputOriginal.Transform(x => x.WithId(x.Id.Substring($"books/{key}/".Length)));
 
-                        var bookData = input.Where(x => x.Id == $"books/{key}/.bookdata")
+                        var bookData = input.Where(x => x.Id == $".bookdata")
                             .SingleEntry()
                             .Markdown(GenerateMarkdownDocument)
                             .YamlMarkdownToDocumentMetadata()
                                 .For<BookMetadata>();
 
-                        var excel = input
-                            .Where(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
-                            .Select(x => x
-                                .ExcelToMarkdownText()
-                                .Markdown(GenerateMarkdownDocument, name: "Markdown Excel"));
-
                         var markdown = input
-                            .Where(x => System.IO.Path.GetExtension(x.Id) == ".md")
-                            .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content"));
+                            .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
+                            .Select(data =>
+                            data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                                .Then(x => x
+                                .ExcelToMarkdownText()
+                                .TextToStream()
+                            ).Else(x => x))
+                            .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content")
+                                .YamlMarkdownToDocumentMetadata()
+                                            .For<OrderMarkdownMetadata>()
+                                            )
+                            .InsertMarkdown()
+                            .Stich("stich")
+                            ;
+                        var nonMarkdown = input
+                            .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
 
-                        var combined = markdown.Concat(excel)
-                            .Select(x => x.YamlMarkdownToDocumentMetadata()
-                                            .For<OrderMarkdownMetadata>());
+                        var chapters = markdown.ListToSingle(x => context.Create(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
 
-                        var inserted = combined.Select(input => input.InsertMarkdown(combined));
+                        var markdownRendered = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
+                            .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                            .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
+                            .FormatXml()
+                            .TextToStream(), "Markdown All");
 
 
-                        var stiched = inserted.Stich("stich")
+
+                        var stiched = markdownRendered
+                            .Concat(nonMarkdown)
                             .Transform(x => x.WithId($"{key}/{x.Id}"))
                             .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>())))
                             .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
 
-                        var chapters = stiched.ListToSingle(x => context.Create(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
 
-                        var stichedWithContentsTable = stiched.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)));
 
-                        var changedDocuments = stichedWithContentsTable.Select(y => y.Transform(x =>
+                        var changedDocuments = stiched.Select(y => y.Transform(x =>
                         {
-                            var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString());
+                            var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>().CalculatedVersion.ToString());
                             var bookPath = NotaPath.Combine(prefix, key);
                             var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
                             return changedDocument;
@@ -248,9 +256,7 @@ namespace Nota.Site.Generator
 
 
                     var result = grouped
-                        .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
-                            .FormatXml()
-                            .TextToStream(), "Markdown All");
+                        ;
 
 
                     return result;
@@ -266,7 +272,10 @@ namespace Nota.Site.Generator
                 .Concat(layoutProvider, "Concat Content and layout FileProvider")
                 .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart");
 
-            var rendered = files.Select(razorProvider, (x, provider) => x.Razor(provider).TextToStream());
+            var rendered = files.Select(razorProvider, (x, provider) => x
+                    .If(x => Path.GetExtension(x.Id) == ".html")
+                        .Then(x => x.Razor(provider).TextToStream())
+                        .Else(x => x));
             var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
             var schemaFiles = schemaRepo
@@ -299,7 +308,7 @@ namespace Nota.Site.Generator
                 ;
 
             var g = rendered2
-                .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
+                //.Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                 .Concat(schemaFiles)
                 .Concat(staticFiles)
                 .Persist(new DirectoryInfo(output), generatorOptions)
