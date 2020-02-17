@@ -154,7 +154,7 @@ namespace Nota.Site.Generator
                         foreach (var item in documentsInPartition)
                         {
 
-                            list.Add(StageResult.Create(item, true, item.Id, item.Hash));
+                            list.Add(this.Context.CreateStageResult(item, true, item.Id, item.Hash, item.Hash));
                         }
 
 
@@ -165,7 +165,8 @@ namespace Nota.Site.Generator
                         DocumentsWithChapters = documentsWithChapters.ToArray(),
                         IDToAfterEntry = idToAfter,
                         Partitions = newPatirions.ToArray(),
-                        PreviousCache = result.Cache
+                        PreviousCache = result.Cache,
+                        Hash = this.Context.GetHashForObject(list.Select(x => x.Hash)),
                     };
                 }
                 else
@@ -292,7 +293,7 @@ namespace Nota.Site.Generator
                             foreach (var item in documentsInPartition)
                             {
                                 var oldHash = cachePartition?.Documents.FirstOrDefault(x => x.Id == item.Id).Hash;
-                                list.Add(StageResult.Create(item, oldHash != item.Hash, item.Id, item.Hash));
+                                list.Add(this.Context.CreateStageResult(item, oldHash != item.Hash, item.Id, item.Hash, item.Hash));
                             }
                         }
                         else
@@ -316,7 +317,7 @@ namespace Nota.Site.Generator
                                     var x = await baseTask;
                                     return x.First(x => x.Id == oldId && x.Hash == oldHash);
                                 });
-                                list.Add(StageResult.Create(task, false, oldId, oldHash));
+                                list.Add(this.Context.CreateStageResult(task, false, oldId, oldHash, oldHash));
                             }
 
                         }
@@ -328,7 +329,8 @@ namespace Nota.Site.Generator
                         DocumentsWithChapters = documentsWithChapters.ToArray(),
                         IDToAfterEntry = idToAfter,
                         Partitions = newPatirions.ToArray(),
-                        PreviousCache = result.Cache
+                        PreviousCache = result.Cache,
+                        Hash = this.Context.GetHashForObject(list.Select(x => x.Hash)),
                     };
 
                 }
@@ -358,7 +360,7 @@ namespace Nota.Site.Generator
                         || performed.Any(x => x.HasChanges);
                 }
 
-                return StageResultList.Create(performed, hasChanges, ids, newCache);
+                return this.Context.CreateStageResultList(performed, hasChanges, ids, newCache, newCache.Hash);
             }
             else
                 ids = cache.Partitions.SelectMany(x => x.Documents).Select(x => x.Id).ToImmutableList();
@@ -367,7 +369,7 @@ namespace Nota.Site.Generator
                 var temp = await task;
                 return temp.Item1;
             });
-            return StageResultList.Create(actualTask, hasChanges, ids, cache);
+            return this.Context.CreateStageResultList(actualTask, hasChanges, ids, cache, cache.Hash);
         }
 
         private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IDocument<MarkdownDocument>[] documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
@@ -482,6 +484,7 @@ namespace Nota.Site.Generator
         public string[] DocumentsWithChapters { get; set; }
 
         public Partition[] Partitions { get; set; }
+        public string Hash { get; set; }
     }
 
 }

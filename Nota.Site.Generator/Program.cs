@@ -111,18 +111,15 @@ namespace Nota.Site.Generator
                 .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
 
             var staticFiles = staticFilesInput
-                   // HACK: Adding the hash of all sassFiles to the documents will ensure that when any sass file changes all other sass file will also have changes flaged.
-                   .Merge(sassFiles.ListToSingle(x => context.Create("", string.Join("|", x.Select(y => y.Hash)), "id")), (doc, v) => doc.With(doc.Metadata.Add(v)))
+                   .SetVariable(sassFiles)
                    .Select(input =>
-                   input.If(x => Path.GetExtension(x.Id) == ".scss")
-                   .Then(x =>
-                       x.ToText()
-                       .Sass(sassFiles)
-                       .TextToStream())
-                   .Else(x => x))
-                   // We wan't to remove the hack from before. 1. We (hopefully not) want to use it again, and prevent unnessary changes.
-                   .Transform(x => x.With(x.Metadata.Remove<IDocument<string>>()))
-                   ;
+                       input.If(x => Path.GetExtension(x.Id) == ".scss")
+                       .Then(x =>
+                           x.ToText()
+                           .GetVariable(sassFiles, (y, sass) => y.Sass(sass))
+                           .TextToStream())
+                       .Else(x => x.GetVariable(sassFiles, (y, _) => y))
+                   );
 
             var generatorOptions = new GenerationOptions()
             {
@@ -230,7 +227,8 @@ namespace Nota.Site.Generator
                             .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
                             .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                             .FormatXml()
-                            .TextToStream(), "Markdown All");
+                            .TextToStream(), "Markdown All")
+                            .Silblings();
 
 
 
@@ -272,10 +270,14 @@ namespace Nota.Site.Generator
                 .Concat(layoutProvider, "Concat Content and layout FileProvider")
                 .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart");
 
-            var rendered = files.Select(razorProvider, (x, provider) => x
+            var rendered = files
+                .SetVariable(razorProvider)
+                .Select(input => input
                     .If(x => Path.GetExtension(x.Id) == ".html")
-                        .Then(x => x.Razor(provider).TextToStream())
-                        .Else(x => x));
+                        .Then(x => x
+                            .GetVariable(razorProvider, (y, provider) => y
+                                .Razor(provider).TextToStream()))
+                        .Else(x => x.GetVariable(razorProvider, (y,_)=>y)));
             var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
             var schemaFiles = schemaRepo

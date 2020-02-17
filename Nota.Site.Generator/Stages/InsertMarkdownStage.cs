@@ -85,12 +85,12 @@ namespace Nota.Site.Generator.Stages
                         });
                         if (!p.HasChanges && dependsOnHasChanges.All(hasChanges => !hasChanges))
                         {
-                            return (result: StageResult.Create(LazyTask.Create(async () => (await subTask).result), false, p.Id, oldHash), depndendOn: cache.inputIdToInsertedItesm[p.Id]);
+                            return (result: this.Context.CreateStageResult(LazyTask.Create(async () => (await subTask).result), false, p.Id, oldHash, oldHash), depndendOn: cache.inputIdToInsertedItesm[p.Id]);
                         }
                     }
 
                     var (subResult, depndendOn) = await subTask;
-                    return (result: StageResult.Create(subResult, subResult.Hash != oldHash, subResult.Id, subResult.Hash), depndendOn);
+                    return (result: this.Context.CreateStageResult(subResult, subResult.Hash != oldHash, subResult.Id, subResult.Hash, subResult.Hash), depndendOn);
                 }));
 
                 return list;
@@ -109,7 +109,8 @@ namespace Nota.Site.Generator.Stages
                     DocumentOrder = temp.Select(x => x.result.Id).ToArray(),
                     IdToOutputHash = temp.ToDictionary(x => x.result.Id, x => x.result.Cache),
                     inputIdToInsertedItesm = temp.ToDictionary(x => x.result.Id, x => x.depndendOn),
-                    PreviousCache = result.Cache
+                    PreviousCache = result.Cache,
+                    Hash = this.Context.GetHashForObject(temp.Select(x => x.result.Hash)),
                 };
 
                 ids = newCache.DocumentOrder.ToImmutableList();
@@ -120,8 +121,7 @@ namespace Nota.Site.Generator.Stages
                 ids = newCache.DocumentOrder.ToImmutableList();
             }
 
-            return StageResultList.Create(LazyTask.Create(async () => (await task).Select<(StageResult<MarkdownDocument, string> result, string[] depndendOn), StageResult<MarkdownDocument, string>>(x => x.result).ToImmutableList()), hasChanges, ids, newCache);
-
+            return this.Context.CreateStageResultList(LazyTask.Create(async () => (await task).Select<(StageResult<MarkdownDocument, string> result, string[] depndendOn), StageResult<MarkdownDocument, string>>(x => x.result).ToImmutableList()), hasChanges, ids, newCache, newCache.Hash);
         }
 
 
@@ -197,6 +197,7 @@ namespace Nota.Site.Generator.Stages
         public Dictionary<string, string[]> inputIdToInsertedItesm { get; set; }
         public Dictionary<string, string> IdToOutputHash { get; set; }
         public string[] DocumentOrder { get; set; }
+        public string Hash { get; set; }
     }
 
 

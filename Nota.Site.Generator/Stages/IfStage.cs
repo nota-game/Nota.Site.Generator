@@ -10,6 +10,7 @@ using Stasistium.Stages;
 
 namespace Stasistium.Stages
 {
+
     public class IfStage<TInput, TInputCache, TCacheTrue, TCacheFalse, TResult> : StageBase<TResult, IfCache<TInputCache, TCacheTrue, TCacheFalse>>
     where TCacheTrue : class
     where TCacheFalse : class
@@ -96,7 +97,7 @@ namespace Stasistium.Stages
                 return temp.resultDocument;
             });
 
-            return StageResult.Create(actualTask, hasChanges, documentId, newCache);
+            return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash);
         }
 
 
@@ -112,7 +113,7 @@ namespace Stasistium.Stages
 
             protected override Task<StageResult<TInput, string>> DoInternal(string? cache, OptionToken options)
             {
-                return Task.FromResult(StageResult.Create(this.document, this.document.Hash != cache, this.document.Id, this.document.Hash));
+                return Task.FromResult(this.Context.CreateStageResult(this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
             }
         }
 
