@@ -160,7 +160,7 @@ namespace Nota.Site.Generator.Stages
 
                             var performed = await result.Perform;
                             yield return performed;
-                            await foreach (var item in DeepCopy(performed.Value.Blocks, pathResolver, lookup))
+                            await foreach (var item in DeepCopy(performed.Value.Blocks, pathResolver.ForPath(insertBlock.Reference), lookup))
                                 yield return item;
 
                             break;
