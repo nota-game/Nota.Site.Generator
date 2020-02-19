@@ -208,5 +208,35 @@ namespace Stasistium
                 return new IfStage<TInput, Cache, TCacheTrue, TCacheFalse, TResult>(this.stage, this.predicates, this.piplinesTrue, piplinesFalse, this.stage.Context, this.name);
             }
         }
+
+        public static MultiStageBase<TIn, string, ConcatStageManyCache<WhereStageCache<TInCache>, TSecondOutCache>> Branch<TIn, TInItemCache, TInCache, TSecondOutItemCache, TSecondOutCache>(this MultiStageBase<TIn, TInItemCache, TInCache> input, Predicate<IDocument<TIn>> predicate, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TIn, TSecondOutItemCache, TSecondOutCache>> branch)
+            where TInItemCache : class
+            where TInCache : class
+            where TSecondOutItemCache : class
+            where TSecondOutCache : class
+        {
+
+            var truePath = branch(input.Where(x => predicate(x)));
+            var falsePath = input.Where(x => !predicate(x));
+
+            return falsePath.Concat(truePath);
+        }
+
+        public static MultiStageBase<TOut, string, ConcatStageManyCache<TThirdOutCache, TSecondOutCache>> Branch<TIn, TOut, TInItemCache, TInCache, TSecondOutItemCache, TSecondOutCache, TThirdOutItemCache, TThirdOutCache>(this MultiStageBase<TIn, TInItemCache, TInCache> input, Predicate<IDocument<TIn>> predicate, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TOut, TSecondOutItemCache, TSecondOutCache>> branch, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TOut, TThirdOutItemCache, TThirdOutCache>> elseBranch)
+            where TThirdOutItemCache : class
+            where TThirdOutCache : class
+            where TInItemCache : class
+            where TInCache : class
+            where TSecondOutItemCache : class
+            where TSecondOutCache : class
+        {
+
+            var truePath = branch(input.Where(x => predicate(x)));
+            var falsePath = elseBranch(input.Where(x => !predicate(x)));
+
+            return falsePath.Concat(truePath);
+        }
+
+
     }
 }
