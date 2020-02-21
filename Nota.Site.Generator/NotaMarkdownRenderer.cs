@@ -30,24 +30,43 @@ namespace Nota.Site.Generator
                 case Markdown.Blocks.ExtendedTableBlock table:
                     builder.Append("<table>");
 
-                    for (int i = 0; i < table.Rows.Count; i++)
+                    if (table.HasHeader)
                     {
-                        builder.Append("<tr>");
-                        for (int j = 0; j < table.Rows[i].Cells.Count; j++)
+                        builder.Append("<thead>");
+                        PrintRows(0, 1, true);
+                        builder.Append("</thead>");
+                        builder.Append("<tbody>");
+                        PrintRows(1, table.Rows.Count, false);
+                        builder.Append("</tbody>");
+                    }
+                    else
+                    {
+                        builder.Append("<tbody>");
+                        PrintRows(0, table.Rows.Count, false);
+                        builder.Append("</tbody>");
+                    }
+
+                    void PrintRows(int from, int to, bool header)
+                    {
+                        for (int i = from; i < to; i++)
                         {
-                            if(j==0 && table.HasHeader)
-                            builder.Append("<th>");
-                            else
-                            builder.Append("<td>");
+                            builder.Append("<tr>");
+                            for (int j = 0; j < table.Rows[i].Cells.Count; j++)
+                            {
+                                if (i == 0 && table.HasHeader)
+                                    builder.Append("<th>");
+                                else
+                                    builder.Append("<td>");
 
-                            this.Render(builder, table.Rows[i].Cells[j].Inlines);
+                                this.Render(builder, table.Rows[i].Cells[j].Inlines);
 
-                            if(j==0 && table.HasHeader)
-                                builder.Append("</th>");
-                            else
-                                builder.Append("</td>");
+                                if (i == 0 && table.HasHeader)
+                                    builder.Append("</th>");
+                                else
+                                    builder.Append("</td>");
+                            }
+                            builder.Append("</tr>");
                         }
-                        builder.Append("</tr>");
                     }
 
                     builder.Append("</table>");

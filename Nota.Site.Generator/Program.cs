@@ -180,7 +180,7 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
-                .Where(x => true)
+                //.Where(x => true)
                 .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
                 .SelectMany(input =>
                 {
