@@ -27,6 +27,32 @@ namespace Nota.Site.Generator
 
                     break;
 
+                case Markdown.Blocks.ExtendedTableBlock table:
+                    builder.Append("<table>");
+
+                    for (int i = 0; i < table.Rows.Count; i++)
+                    {
+                        builder.Append("<tr>");
+                        for (int j = 0; j < table.Rows[i].Cells.Count; j++)
+                        {
+                            if(j==0 && table.HasHeader)
+                            builder.Append("<th>");
+                            else
+                            builder.Append("<td>");
+
+                            this.Render(builder, table.Rows[i].Cells[j].Inlines);
+
+                            if(j==0 && table.HasHeader)
+                                builder.Append("</th>");
+                            else
+                                builder.Append("</td>");
+                        }
+                        builder.Append("</tr>");
+                    }
+
+                    builder.Append("</table>");
+                    break;
+
                 default:
                     base.Render(builder, block);
                     break;

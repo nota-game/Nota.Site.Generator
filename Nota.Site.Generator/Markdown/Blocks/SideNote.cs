@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 
 namespace Nota.Site.Generator.Markdown.Blocks
 {
+
     public class SideNote : MarkdownBlock
     {
         public SideNote(string id, SideNoteType sideNoteType, IEnumerable<(string id, byte distribution)> distributions, IEnumerable<MarkdownBlock> blocks)

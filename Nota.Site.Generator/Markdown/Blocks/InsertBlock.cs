@@ -86,7 +86,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
             {
                 case TableBlock tableBlock:
                     {
-                        return new TableBlock
+                        return new ExtendedTableBlock
                         {
                             ColumnDefinitions = tableBlock.ColumnDefinitions
                                 .Select<TableBlock.TableColumnDefinition, TableBlock.TableColumnDefinition>(x => new TableBlock.TableColumnDefinition()
@@ -101,7 +101,8 @@ namespace Nota.Site.Generator.Markdown.Blocks
                                          {
                                              Inlines = this.DeepCopy(y.Inlines)
                                          }).ToArray()
-                                }).ToArray()
+                                }).ToArray(),
+                            HasHeader = (tableBlock as ExtendedTableBlock)?.HasHeader ?? false
                         };
                     }
 

@@ -52,7 +52,10 @@ namespace Nota.Site.Generator
                         var itemTask = await item.Perform;
                         var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
                         if (order?.After != null)
-                            idToAfter[itemTask.Id] = resolver[order.After];
+                        {
+                            var resolved = resolver[order.After];
+                            idToAfter[itemTask.Id] = resolved;
+                        }
 
                         if (this.ContainsChapters(itemTask.Value.Blocks))
                             documentsWithChapters.Add(itemTask.Id);
@@ -60,6 +63,12 @@ namespace Nota.Site.Generator
                     }
 
 
+                    // check for wrong Pathes
+                    var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x=>x.Key);
+                    if (wrongPathes.Any())
+                    {
+                        throw this.Context.Exception($"The after pathes of following documents could not be resolved: {string.Join(", ", wrongPathes)}");
+                    }
 
                     // check for double entrys
 

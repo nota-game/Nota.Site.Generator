@@ -21,7 +21,7 @@ namespace Nota.Site.Generator
         private static IWebHost? host;
 
 
-        private static readonly string[] MarkdownExtensions = { ".md", ".xslx" };
+        private static readonly string[] MarkdownExtensions = { ".md", ".xlsx" };
 
         private static bool IsMarkdown(IDocument document)
         {
@@ -47,12 +47,17 @@ namespace Nota.Site.Generator
 
             await using var context = new GeneratorContext();
 
+
             var configFile = context.StageFromResult(configuration.FullName, x => x)
              .File()
              .Json("Parse Configuration")
              .For<Config>();
 
-            var config = (await (await configFile.DoIt(null, new GenerationOptions() { Refresh = false }.Token)).Perform).Value;
+            var config = (await (await configFile.DoIt(null, new GenerationOptions()
+            {
+                Refresh = false,
+                CompressCache = true,
+            }.Token)).Perform).Value;
 
             // Create the committer's signature and commit
             var author = new LibGit2Sharp.Signature("NotaSiteGenerator", "@NotaSiteGenerator", DateTime.Now);
@@ -90,7 +95,9 @@ namespace Nota.Site.Generator
 
             var contentRepo = configFile
                 .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
-                .GitModul("Git for Content");
+                .GitModul("Git for Content")
+                .Where(x => x.Id == "master") // for debuging 
+                ;
 
             var schemaRepo = configFile
                 .Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
@@ -173,7 +180,7 @@ namespace Nota.Site.Generator
 
 
             var files = contentRepo
-                //.Where(x => true)
+                .Where(x => true)
                 .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
                 .SelectMany(input =>
                 {
@@ -277,7 +284,7 @@ namespace Nota.Site.Generator
                         .Then(x => x
                             .GetVariable(razorProvider, (y, provider) => y
                                 .Razor(provider).TextToStream()))
-                        .Else(x => x.GetVariable(razorProvider, (y,_)=>y)));
+                        .Else(x => x.GetVariable(razorProvider, (y, _) => y)));
             var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
             var schemaFiles = schemaRepo
@@ -484,7 +491,8 @@ namespace Nota.Site.Generator
             return MarkdownDocument.CreateBuilder()
                             .AddBlockParser<Blocks.HeaderBlock.HashParser>()
                             .AddBlockParser<Blocks.ListBlock.Parser>()
-                            .AddBlockParser<Blocks.TableBlock.Parser>()
+                            //.AddBlockParser<Blocks.TableBlock.Parser>()
+                            .AddBlockParser<Markdown.Blocks.ExtendedTableBlock.Parser>()
                             .AddBlockParser<Blocks.QuoteBlock.Parser>()
                             .AddBlockParser<Blocks.LinkReferenceBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.InsertBlock.Parser>()

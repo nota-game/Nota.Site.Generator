@@ -71,8 +71,34 @@ namespace Nota.Site.Generator.Markdown
                 var result = new XmlSelectorBlock(header, blocks);
 
                 return BlockParseResult.Create(result, startOfLine, lastend + startOfLine);
-
             }
+        }
+
+
+        public override string ToString()
+        {
+            var builder = new StringBuilder();
+
+            WriteLine(this.Header.ToString());
+            var splitter = new LineSplitter(string.Join("\n\n", this.Blocks));
+            while (splitter.TryGetNextLine(out var line, out _, out _))
+            {
+                WriteLine(line);
+            }
+
+            void WriteLine(ReadOnlySpan<char> txt)
+            {
+                Write(txt);
+                builder.AppendLine();
+            }
+            void Write(ReadOnlySpan<char> txt)
+            {
+                builder.Append("/ ");
+                builder.Append(txt);
+            }
+
+
+            return builder.ToString();
         }
 
     }
@@ -102,7 +128,7 @@ namespace Nota.Site.Generator.Markdown
 
                 var select = markdown.Substring(tripPos, endOf - tripPos);
 
-                
+
 
                 string? context = null;
                 var start = endOf + 1;
@@ -147,6 +173,12 @@ namespace Nota.Site.Generator.Markdown
 
             public override IEnumerable<char> TripChar => "{";
         }
+
+        public override string ToString()
+        {
+            return $"{{{this.Select}}}({this.Context ?? string.Empty})[{this.Id ?? string.Empty}]";
+        }
+
     }
 
 }
