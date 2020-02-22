@@ -45,331 +45,327 @@ namespace Nota.Site.Generator
             if (!configuration.Exists)
                 throw new FileNotFoundException($"No configuration file was found ({configuration.FullName})");
 
-            await using var context = new GeneratorContext();
-
-
-            var configFile = context.StageFromResult(configuration.FullName, x => x)
-             .File()
-             .Json("Parse Configuration")
-             .For<Config>();
-
-            var config = (await (await configFile.DoIt(null, new GenerationOptions()
+            Config config;
+            await using (var context = new GeneratorContext())
             {
-                Refresh = false,
-                CompressCache = true,
-            }.Token)).Perform).Value;
+
+
+
+                var configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
+                 .File()
+                 .Json("Parse Configuration")
+                 .For<Config>();
+
+                config = (await (await configFile.DoIt(null, new GenerationOptions()
+                {
+                    Refresh = false,
+                    CompressCache = true,
+                }.Token)).Perform).Value;
+            }
 
             // Create the committer's signature and commit
             var author = new LibGit2Sharp.Signature("NotaSiteGenerator", "@NotaSiteGenerator", DateTime.Now);
             var committer = author;
 
-
-
-            using var repo = PreGit(context, config, author, workdirPath, cache, output);
-
-            if (serve)
-            {
-                var workingDir = new DirectoryInfo(output);
-                workingDir.Create();
-                host = new WebHostBuilder()
-                .UseKestrel()
-                .UseContentRoot(workingDir.FullName)
-                .UseWebRoot(workingDir.FullName)
-                .ConfigureServices(services =>
-                {
-                    services.AddLiveReload();
-                })
-                .Configure(app =>
-                {
-                    app.UseLiveReload();
-                    app.UseStaticFiles();
-                })
-                .Build();
-                await host.StartAsync();
-
-                var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
-                foreach (var item in feature.Addresses)
-                    Console.WriteLine($"Listinging to: {item}");
-            }
-
-
-            var contentRepo = configFile
-                .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
-                .GitModul("Git for Content")
-                .Where(x => x.Id == "master") // for debuging 
-                ;
-
-            var schemaRepo = configFile
-                .Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
-                    .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
-                .GitModul("Git for Schema");
-
-            var layoutProvider = configFile
-                .Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"), "Transform LayoutProvider from Config")
-                .FileSystem("Layout Filesystem")
-                .FileProvider("Layout", "Layout FIle Provider");
-
-            var staticFilesInput = configFile
-                .Transform(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"), "Static FIle from Config")
-                .FileSystem("static Filesystem");
-
-
-            var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
-                .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
-
-            var staticFiles = staticFilesInput
-                   .SetVariable(sassFiles)
-                   .Select(input =>
-                       input.If(x => Path.GetExtension(x.Id) == ".scss")
-                       .Then(x =>
-                           x.ToText()
-                           .GetVariable(sassFiles, (y, sass) => y.Sass(sass))
-                           .TextToStream())
-                       .Else(x => x.GetVariable(sassFiles, (y, _) => y))
-                   );
-
-            var generatorOptions = new GenerationOptions()
-            {
-                CompressCache = false,
-                Refresh = true
-            };
             var s = System.Diagnostics.Stopwatch.StartNew();
 
 
+            using var repo = PreGit(config, author, workdirPath, cache, output);
+            await using (var context = new GeneratorContext())
+            {
 
-            var siteData = contentRepo
-                .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()), "Remove GitReposetoryMetadata form content for siteData")
-                .SelectMany(input =>
+                var configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
+                 .File()
+                 .Json("Parse Configuration")
+                 .For<Config>();
+
+                if (serve)
                 {
-                    var startData = input
-                    .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-                    .GitRefToFiles("Read Files from Git (Content)")
-                        .Sidecar()
-                            .For<BookMetadata>(".metadata")
-                        ;
-
-                    var books = startData.Where(x => x.Id.EndsWith("/.bookdata"), "only bookdata")
-                        .Select(input2 =>
-                            input2.Markdown(GenerateMarkdownDocument, "siteData markdown")
-                            .YamlMarkdownToDocumentMetadata("sitedata YamlMarkdown")
-                                .For<BookMetadata>()
-                            .Transform(x =>
-                            {
-                                var startIndex = x.Id.IndexOf('/') + 1;
-                                var endIndex = x.Id.IndexOf('/', startIndex);
-                                var key = x.Id[startIndex..endIndex];
-
-                                var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString(), key);
-
-                                return ArgumentBookMetadata(x, location)
-                                    .WithId(location);
-                            }))
-                        .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null, "filter book in sitedata without Bookdata");
-
-                    return books;
-                }, "Generating MetadataBooks")
-                .ListToSingle(input =>
-                {
-                    var siteMetadata = new SiteMetadata()
+                    var workingDir = new DirectoryInfo(output);
+                    workingDir.Create();
+                    host = new WebHostBuilder()
+                    .UseKestrel()
+                    .UseContentRoot(workingDir.FullName)
+                    .UseWebRoot(workingDir.FullName)
+                    .ConfigureServices(services =>
                     {
-                        Books = input.Select(x => x.Metadata.GetValue<BookMetadata>()).ToArray()
-                    };
-                    return context.Create(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
-                }, "make siteData to single element");
+                        services.AddLiveReload();
+                    })
+                    .Configure(app =>
+                    {
+                        app.UseLiveReload();
+                        app.UseStaticFiles();
+                    })
+                    .Build();
+                    await host.StartAsync();
+
+                    var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+                    foreach (var item in feature.Addresses)
+                        Console.WriteLine($"Listinging to: {item}");
+                }
 
 
+                var contentRepo = configFile
+                    .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
+                    .GitModul("Git for Content")
+                    .Where(x => x.Id == "master") // for debuging 
+                    ;
 
-            var files = contentRepo
-                //.Where(x => true)
-                .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()))
-                .SelectMany(input =>
+                var schemaRepo = configFile
+                    .Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
+                        .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
+                    .GitModul("Git for Schema");
+
+                var layoutProvider = configFile
+                    .Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"), "Transform LayoutProvider from Config")
+                    .FileSystem("Layout Filesystem")
+                    .FileProvider("Layout", "Layout FIle Provider");
+
+                var staticFilesInput = configFile
+                    .Transform(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"), "Static FIle from Config")
+                    .FileSystem("static Filesystem");
+
+
+                var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
+                    .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
+
+                var staticFiles = staticFilesInput
+                       .SetVariable(sassFiles)
+                       .Select(input =>
+                           input.If(x => Path.GetExtension(x.Id) == ".scss")
+                           .Then(x =>
+                               x.ToText()
+                               .GetVariable(sassFiles, (y, sass) => y.Sass(sass))
+                               .TextToStream())
+                           .Else(x => x.GetVariable(sassFiles, (y, _) => y))
+                       );
+
+                var generatorOptions = new GenerationOptions()
                 {
-                    var startData = input
-                    .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-                    .GitRefToFiles("Read Files from Git (Content)")
-                        .Sidecar()
-                            .For<BookMetadata>(".metadata")
-                        ;
+                    CompressCache = false,
+                    Refresh = true
+                };
 
 
-                    var grouped = startData.Where(x => x.Id.StartsWith("books/")).GroupBy
-                        (x =>
+                var contentFiles = contentRepo
+                    .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()), "Remove GitReposetoryMetadata form content for siteData")
+                    .SelectMany(input =>
+                    {
+                        var startData = input
+                        .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
+                        .GitRefToFiles("Read Files from Git (Content)")
+                            .Sidecar()
+                                .For<BookMetadata>(".metadata")
+                            ;
+                        return startData;
+                    });
+
+
+                var siteData = contentFiles
+                    .Where(x => x.Id.EndsWith("/.bookdata"), "only bookdata")
+                    .Select(input2 =>
+                        input2.Markdown(GenerateMarkdownDocument, "siteData markdown")
+                        .YamlMarkdownToDocumentMetadata("sitedata YamlMarkdown")
+                            .For<BookMetadata>()
+                        .Transform(x =>
                         {
                             var startIndex = x.Id.IndexOf('/') + 1;
                             var endIndex = x.Id.IndexOf('/', startIndex);
-                            return x.Id[startIndex..endIndex];
+                            var key = x.Id[startIndex..endIndex];
+
+                            var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString(), key);
+
+                            return ArgumentBookMetadata(x, location)
+                                .WithId(location);
+                        }))
+                    .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null, "filter book in sitedata without Bookdata")
+                    .ListToSingle(input =>
+                    {
+                        var siteMetadata = new SiteMetadata()
+                        {
+                            Books = input.Select(x => x.Metadata.GetValue<BookMetadata>()).ToArray()
+                        };
+                        return context.CreateDocument(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
+                    }, "make siteData to single element");
+
+
+
+
+
+                var grouped = contentFiles.Where(x => x.Id.StartsWith("books/")).GroupBy
+                    (x =>
+                    {
+                        var startIndex = x.Id.IndexOf('/') + 1;
+                        var endIndex = x.Id.IndexOf('/', startIndex);
+                        return x.Id[startIndex..endIndex];
+                    }
+
+                , (inputOriginal, key) =>
+                {
+                    var input = inputOriginal.Transform(x => x.WithId(x.Id.Substring($"books/{key}/".Length)));
+
+                    var bookData = input.Where(x => x.Id == $".bookdata")
+                        .SingleEntry()
+                        .Markdown(GenerateMarkdownDocument)
+                        .YamlMarkdownToDocumentMetadata()
+                            .For<BookMetadata>();
+
+                    var markdown = input
+                        .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
+                        .Select(data =>
+                        data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                            .Then(x => x
+                            .ExcelToMarkdownText()
+                            .TextToStream()
+                        ).Else(x => x))
+                        .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content")
+                            .YamlMarkdownToDocumentMetadata()
+                                        .For<OrderMarkdownMetadata>()
+                                        )
+                        .InsertMarkdown()
+                        .Stich("stich")
+                        ;
+                    var nonMarkdown = input
+                        .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
+
+                    var chapters = markdown.ListToSingle(x => context.CreateDocument(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
+
+                    var markdownRendered = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
+                        .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                        .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
+                        .FormatXml()
+                        .TextToStream(), "Markdown All")
+                        .Silblings();
+
+
+
+                    var stiched = markdownRendered
+                        .Concat(nonMarkdown)
+                        .Transform(x => x.WithId($"{key}/{x.Id}"))
+                        .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>())))
+                        .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
+
+
+
+                    var changedDocuments = stiched.Select(y => y.Transform(x =>
+                    {
+                        var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>().CalculatedVersion.ToString());
+                        var bookPath = NotaPath.Combine(prefix, key);
+                        var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
+                        return changedDocument;
+                    }));
+
+                    return changedDocuments;
+                }, "Group by for files");
+
+
+
+                var files = grouped
+                    .Transform(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
+                    .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
+                    ;
+
+
+
+                var razorProvider = files
+                    .FileProvider("Content", "Content file Provider")
+                    .Concat(layoutProvider, "Concat Content and layout FileProvider")
+                    .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart");
+
+                var rendered = files
+                    .SetVariable(razorProvider)
+                    .Select(input => input
+                        .If(x => Path.GetExtension(x.Id) == ".html")
+                            .Then(x => x
+                                .GetVariable(razorProvider, (y, provider) => y
+                                    .Razor(provider).TextToStream()))
+                            .Else(x => x.GetVariable(razorProvider, (y, _) => y)));
+                var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+                var schemaFiles = schemaRepo
+                    .SelectMany(input =>
+                     input
+                     .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))))
+                     .GitRefToFiles()
+                     .Where(x => System.IO.Path.GetExtension(x.Id) != ".md")
+                     .Select(x =>
+                        x.ToText()
+                        .Transform(y =>
+                        {
+                            var gitData = y.Metadata.GetValue<GitMetadata>()!;
+                            var version = gitData.CalculatedVersion;
+                            var host = y.Metadata.GetValue<HostMetadata>()!.Host;
+                            var newText = hostReplacementRegex.Replace(y.Value, @$"{host}/schema/{version}/");
+                            return y.With(newText, y.Context.GetHashForString(newText));
+                        })
+                        .TextToStream()
+                     )
+                     .Transform(x =>
+                     {
+                         var gitData = x.Metadata.GetValue<GitMetadata>()!;
+                         var version = gitData.CalculatedVersion;
+
+                         return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
+                     }));
+
+                var rendered2 = rendered
+                    ;
+
+                var g = rendered2
+                    //.Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
+                    .Concat(schemaFiles)
+                    .Concat(staticFiles)
+                    .Persist(new DirectoryInfo(output), generatorOptions)
+                    ;
+
+                if (host != null)
+                {
+
+                    s.Stop();
+                    context.Logger.Info($"Preperation Took {s.Elapsed}");
+
+                    bool isRunning = true;
+
+                    Console.CancelKeyPress += (sender, e) => isRunning = false;
+
+                    while (isRunning)
+                    {
+                        try
+                        {
+                            Console.Clear();
+                            s.Restart();
+                            await g.UpdateFiles().ConfigureAwait(false);
+                            s.Stop();
+                            context.Logger.Info($"Update Took {s.Elapsed}");
+                        }
+                        catch (Exception e)
+                        {
+
+                            Console.WriteLine("Error");
+                            Console.Error.WriteLine(e);
                         }
 
-                    , (inputOriginal, key) =>
-                    {
-                        var input = inputOriginal.Transform(x => x.WithId(x.Id.Substring($"books/{key}/".Length)));
-
-                        var bookData = input.Where(x => x.Id == $".bookdata")
-                            .SingleEntry()
-                            .Markdown(GenerateMarkdownDocument)
-                            .YamlMarkdownToDocumentMetadata()
-                                .For<BookMetadata>();
-
-                        var markdown = input
-                            .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
-                            .Select(data =>
-                            data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
-                                .Then(x => x
-                                .ExcelToMarkdownText()
-                                .TextToStream()
-                            ).Else(x => x))
-                            .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content")
-                                .YamlMarkdownToDocumentMetadata()
-                                            .For<OrderMarkdownMetadata>()
-                                            )
-                            .InsertMarkdown()
-                            .Stich("stich")
-                            ;
-                        var nonMarkdown = input
-                            .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
-
-                        var chapters = markdown.ListToSingle(x => context.Create(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
-
-                        var markdownRendered = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
-                            .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
-                            .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
-                            .FormatXml()
-                            .TextToStream(), "Markdown All")
-                            .Silblings();
-
-
-
-                        var stiched = markdownRendered
-                            .Concat(nonMarkdown)
-                            .Transform(x => x.WithId($"{key}/{x.Id}"))
-                            .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>())))
-                            .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
-
-
-
-                        var changedDocuments = stiched.Select(y => y.Transform(x =>
-                        {
-                            var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>().CalculatedVersion.ToString());
-                            var bookPath = NotaPath.Combine(prefix, key);
-                            var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
-                            return changedDocument;
-                        }));
-
-                        return changedDocuments;
-                    }, "Group by for files");
-
-
-
-                    var result = grouped
-                        ;
-
-
-                    return result;
-                }, "Working on content branches")
-                .Transform(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
-                .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
-                ;
-
-
-
-            var razorProvider = files
-                .FileProvider("Content", "Content file Provider")
-                .Concat(layoutProvider, "Concat Content and layout FileProvider")
-                .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart");
-
-            var rendered = files
-                .SetVariable(razorProvider)
-                .Select(input => input
-                    .If(x => Path.GetExtension(x.Id) == ".html")
-                        .Then(x => x
-                            .GetVariable(razorProvider, (y, provider) => y
-                                .Razor(provider).TextToStream()))
-                        .Else(x => x.GetVariable(razorProvider, (y, _) => y)));
-            var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-            var schemaFiles = schemaRepo
-                .SelectMany(input =>
-                 input
-                 .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))))
-                 .GitRefToFiles()
-                 .Where(x => System.IO.Path.GetExtension(x.Id) != ".md")
-                 .Select(x =>
-                    x.ToText()
-                    .Transform(y =>
-                    {
-                        var gitData = y.Metadata.GetValue<GitMetadata>()!;
-                        var version = gitData.CalculatedVersion;
-                        var host = y.Metadata.GetValue<HostMetadata>()!.Host;
-                        var newText = hostReplacementRegex.Replace(y.Value, @$"{host}/schema/{version}/");
-                        return y.With(newText, y.Context.GetHashForString(newText));
-                    })
-                    .TextToStream()
-                 )
-                 .Transform(x =>
-                 {
-                     var gitData = x.Metadata.GetValue<GitMetadata>()!;
-                     var version = gitData.CalculatedVersion;
-
-                     return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
-                 }));
-
-            var rendered2 = rendered
-                ;
-
-            var g = rendered2
-                //.Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
-                .Concat(schemaFiles)
-                .Concat(staticFiles)
-                .Persist(new DirectoryInfo(output), generatorOptions)
-                ;
-
-            if (host != null)
-            {
-
-                s.Stop();
-                context.Logger.Info($"Preperation Took {s.Elapsed}");
-
-                bool isRunning = true;
-
-                Console.CancelKeyPress += (sender, e) => isRunning = false;
-
-                while (isRunning)
-                {
-                    try
-                    {
-                        Console.Clear();
-                        s.Restart();
-                        await g.UpdateFiles().ConfigureAwait(false);
-                        s.Stop();
-                        context.Logger.Info($"Update Took {s.Elapsed}");
+                        Console.WriteLine("Press Q to Quit, any OTHER key to update.");
+                        var key = Console.ReadKey(true);
+                        if (key.Key == ConsoleKey.Q)
+                            isRunning = false;
                     }
-                    catch (Exception e)
-                    {
+                    s.Restart();
+                    await host.StopAsync();
 
-                        Console.WriteLine("Error");
-                        Console.Error.WriteLine(e);
-                    }
 
-                    Console.WriteLine("Press Q to Quit, any OTHER key to update.");
-                    var key = Console.ReadKey(true);
-                    if (key.Key == ConsoleKey.Q)
-                        isRunning = false;
                 }
-                s.Restart();
-                await host.StopAsync();
-                PostGit(author, committer, repo, workdirPath, cache, output);
-                s.Stop();
-                context.Logger.Info($"Finishing took {s.Elapsed}");
+                else
+                {
+                    await g.UpdateFiles().ConfigureAwait(false);
+                }
 
             }
-            else
-            {
-                await g.UpdateFiles().ConfigureAwait(false);
-                PostGit(author, committer, repo, workdirPath, cache, output);
-                s.Stop();
-                context.Logger.Info($"Operation Took {s.Elapsed}");
-            }
 
+
+            PostGit(author, committer, repo, workdirPath, cache, output);
+            s.Stop();
+            Console.WriteLine($"Finishing took {s.Elapsed}");
         }
 
         private static IDocument<T> ArgumentBookMetadata<T>(IDocument<T> x, string location)
@@ -512,7 +508,7 @@ namespace Nota.Site.Generator
                             .Build();
         }
 
-        private static LibGit2Sharp.Repository PreGit(GeneratorContext context, Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)
+        private static LibGit2Sharp.Repository PreGit(Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)
         {
             LibGit2Sharp.Repository repo;
             if (Directory.Exists(workdirPath))
@@ -540,7 +536,7 @@ namespace Nota.Site.Generator
 
             }
             else
-                repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo ?? throw context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
+                repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
 
             if (Directory.Exists(output))
                 Directory.Delete(output, true);
