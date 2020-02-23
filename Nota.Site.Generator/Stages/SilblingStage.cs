@@ -74,7 +74,7 @@ namespace Nota.Site.Generator.Stages
                         hash = cache!.HashOrder[i];
                     }
 
-                    return this.Context.CreateStageResult(subTask, hash != lastHash, current.Id, hash, hash);
+                    return StageResult.CreateStageResult(this.Context, subTask, hash != lastHash, current.Id, hash, hash);
 
                 }));
 
@@ -105,13 +105,14 @@ namespace Nota.Site.Generator.Stages
             }
 
 
-            return this.Context.CreateStageResultList(task, hasChanges, ids, newCache, newCache.Hash);
+            return this.Context.CreateStageResultList(task, hasChanges, ids, newCache, newCache.Hash, result.Cache);
         }
     }
 
 
 
-    public class SlblingCache<TPreviousCache> where TPreviousCache : class
+    public class SlblingCache<TPreviousCache> : IHavePreviousCache<TPreviousCache>
+        where TPreviousCache : class
     {
         public TPreviousCache PreviousCache { get; set; }
 

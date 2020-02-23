@@ -61,15 +61,26 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
                     if (line.Length >= 4 && line[1] == '-' && line[2] == '-' && line[3] == '-')
                     {
+                        var rest = line.Slice(1);
+                        for (int i = 0; i < rest.Length; i++)
+                        {
+                            if (rest[i] != '-' && !char.IsWhiteSpace(rest[i]))
+                                return null;
+                        }
+
                         header = false;
                         continue; // we do not use this line anymore
                     }
 
                     if (header)
                     {
-                        if (id == null)
+
+                        if (text.StartsWith("[") && text.EndsWith("]"))
                         {
-                            id = text.ToString();
+                            if (id != null)
+                                throw new InvalidOperationException($"Id was already set to {id} (tried to set to {text.ToString()})");
+                            id = text.Slice(1, text.Length - 2).ToString();
+
                         }
                         else if (!type.HasValue)
                         {
@@ -90,6 +101,9 @@ namespace Nota.Site.Generator.Markdown.Blocks
                         buffer.AppendLine();
                     }
                 }
+
+                if (header)
+                    return null;
 
                 var blocks = document.ParseBlocks(buffer.ToString(), 0, buffer.Length, out _);
                 var result = new SideNote(id ?? string.Empty, type ?? SideNoteType.Undefined, builder, blocks);
@@ -136,59 +150,6 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
             return builder.ToString();
         }
-    }
-
-
-    public ref struct LineSplitter
-    {
-        private readonly ReadOnlySpan<char> text;
-
-        private int currentIndex;
-
-        public LineSplitter(ReadOnlySpan<char> readOnlySpan) : this()
-        {
-            this.text = readOnlySpan;
-        }
-
-        public bool TryGetNextLine(out ReadOnlySpan<char> line, out int lineStart, out int lineEnd)
-        {
-            if (this.currentIndex >= this.text.Length)
-            {
-                line = ReadOnlySpan<char>.Empty;
-                lineStart = -1;
-                lineEnd = -1;
-                return false;
-            }
-
-            lineStart = this.currentIndex;
-            var currentSubString = this.text[this.currentIndex..];
-            int lineFeedStart = currentSubString.IndexOf('\r');
-            int lineFeedCharacters = 1;
-            if (lineFeedStart == -1)
-            {
-                lineFeedStart = this.text[this.currentIndex..].IndexOf('\n');
-                if (lineFeedStart == -1)
-                {
-                    line = this.text[this.currentIndex..];
-                    lineStart = this.currentIndex;
-                    lineEnd = this.currentIndex + line.Length;
-                    this.currentIndex = lineEnd;
-                    return true;
-                }
-                int lineFeedEnd = lineFeedStart;
-            }
-            else
-            {
-                if (lineFeedStart + 1 < currentSubString.Length && currentSubString[lineFeedStart + 1] == '\n')
-                    lineFeedCharacters = 2;
-            }
-
-            lineEnd = lineStart + lineFeedStart;
-            this.currentIndex += lineFeedStart + lineFeedCharacters;
-            line = currentSubString[0..lineFeedStart];
-            return true;
-        }
-
     }
 
     public enum SideNoteType

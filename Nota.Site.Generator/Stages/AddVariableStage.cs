@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace Stasistium.Stages
 {
+
     public class VariableStage
     {
 
@@ -71,7 +72,7 @@ namespace Stasistium.Stages
                             hash = oldHash;
                         }
 
-                        return this.Context.CreateStageResult(subTask, hasChanges, item.Id, hash, hash);
+                        return StageResult.CreateStageResult(this.Context, subTask, hasChanges, item.Id, hash, hash);
                     }));
                     return list.ToImmutableList();
                 });
@@ -105,7 +106,7 @@ namespace Stasistium.Stages
                 }
 
 
-                return this.Context.CreateStageResultList(task, hasChanges, ids, newCache, newCache.Hash);
+                return this.Context.CreateStageResultList(task, hasChanges, ids, newCache, newCache.Hash, result.Cache, result2.Cache);
 
 
 
@@ -170,7 +171,7 @@ namespace Stasistium.Stages
                             hash = oldHash;
                         }
 
-                        return this.Context.CreateStageResult(subTask, hasChanges, item.Id, hash, hash);
+                        return StageResult.CreateStageResult(this.Context, subTask, hasChanges, item.Id, hash, hash);
                     }));
                     return list.ToImmutableList();
                 });
@@ -204,7 +205,7 @@ namespace Stasistium.Stages
                 }
 
 
-                return this.Context.CreateStageResultList(task, hasChanges, ids, newCache, newCache.Hash);
+                return this.Context.CreateStageResultList(task, hasChanges, ids, newCache, newCache.Hash, result.Cache, result2.Cache);
 
 
 
@@ -230,7 +231,7 @@ namespace Stasistium.Stages
 
             protected override async Task<StageResult<TOut, GetCache<TPreviousCache, TSubCache>>> DoInternal(GetCache<TPreviousCache, TSubCache>? cache, OptionToken options)
             {
-                var result = await this.input.DoIt(cache?.PrviousCache, options);
+                var result = await this.input.DoIt(cache?.PreviousCache, options);
 
                 var task = LazyTask.Create(async () =>
                 {
@@ -240,7 +241,7 @@ namespace Stasistium.Stages
                     var subCache = trueResult.Cache;
                     var resultDocument = await trueResult.Perform;
 
-                    resultDocument.With(resultDocument.Metadata.Remove<Data<T, TPreviousItemCache2, TPreviousCache2>>());
+                    resultDocument = resultDocument.With(resultDocument.Metadata.Remove<Data<T, TPreviousItemCache2, TPreviousCache2>>());
 
                     return (resultDocument, subCache);
                 });
@@ -255,7 +256,7 @@ namespace Stasistium.Stages
 
                     newCache = new GetCache<TPreviousCache, TSubCache>()
                     {
-                        PrviousCache = result.Cache,
+                        PreviousCache = result.Cache,
                         SubCache = subCache,
                         DocumentId = resultDocument.Id,
                         Hash = resultDocument.Hash,
@@ -279,7 +280,7 @@ namespace Stasistium.Stages
                     return temp.resultDocument;
                 });
 
-                return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash);
+                return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash, result.Cache);
             }
 
 
@@ -295,7 +296,7 @@ namespace Stasistium.Stages
 
                 protected override Task<StageResult<TIn, string>> DoInternal(string? cache, OptionToken options)
                 {
-                    return Task.FromResult(this.Context.CreateStageResult(this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
+                    return Task.FromResult(StageResult.CreateStageResult(this.Context, this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
                 }
             }
         }
@@ -317,7 +318,7 @@ namespace Stasistium.Stages
 
             protected override async Task<StageResult<TOut, GetCache<TPreviousCache, TSubCache>>> DoInternal(GetCache<TPreviousCache, TSubCache>? cache, OptionToken options)
             {
-                var result = await this.input.DoIt(cache?.PrviousCache, options);
+                var result = await this.input.DoIt(cache?.PreviousCache, options);
 
                 var task = LazyTask.Create(async () =>
                 {
@@ -327,7 +328,7 @@ namespace Stasistium.Stages
                     var subCache = trueResult.Cache;
                     var resultDocument = await trueResult.Perform;
 
-                    resultDocument.With(resultDocument.Metadata.Remove<Data<T, TPreviousCache2>>());
+                    resultDocument = resultDocument.With(resultDocument.Metadata.Remove<Data<T, TPreviousCache2>>());
 
                     return (resultDocument, subCache);
                 });
@@ -342,7 +343,7 @@ namespace Stasistium.Stages
 
                     newCache = new GetCache<TPreviousCache, TSubCache>()
                     {
-                        PrviousCache = result.Cache,
+                        PreviousCache = result.Cache,
                         SubCache = subCache,
                         DocumentId = resultDocument.Id,
                         Hash = resultDocument.Hash,
@@ -366,7 +367,7 @@ namespace Stasistium.Stages
                     return temp.resultDocument;
                 });
 
-                return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash);
+                return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash, result.Cache);
             }
 
 
@@ -382,7 +383,7 @@ namespace Stasistium.Stages
 
                 protected override Task<StageResult<TIn, string>> DoInternal(string? cache, OptionToken options)
                 {
-                    return Task.FromResult(this.Context.CreateStageResult(this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
+                    return Task.FromResult(StageResult.CreateStageResult(this.Context, this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
                 }
             }
         }
@@ -431,19 +432,20 @@ namespace Stasistium.Stages
 
     }
 
-    public class GetCache<TPreviousCache, TPreviousCache2>
+    public class GetCache<TPreviousCache, TSubCache> : IHavePreviousCache<TPreviousCache>
         where TPreviousCache : class
-        where TPreviousCache2 : class
+        where TSubCache : class
     {
-        public TPreviousCache PrviousCache { get; set; }
-        public TPreviousCache2 SubCache { get; set; }
+        public TPreviousCache PreviousCache { get; set; }
+        public TSubCache SubCache { get; set; }
         public string DocumentId { get; set; }
         public string Hash { get; set; }
     }
 
 
-    public class VariableCache<TPreviousCache, TPreviousCache2>
+    public class VariableCache<TPreviousCache, TPreviousCache2> : IHavePreviousCache<TPreviousCache, TPreviousCache2>
         where TPreviousCache : class
+        where TPreviousCache2 : class
     {
         public TPreviousCache PreviousCache { get; set; }
         public TPreviousCache2 PreviousCache2 { get; set; }

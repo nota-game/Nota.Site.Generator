@@ -85,12 +85,12 @@ namespace Nota.Site.Generator.Stages
                         });
                         if (!p.HasChanges && dependsOnHasChanges.All(hasChanges => !hasChanges))
                         {
-                            return (result: this.Context.CreateStageResult(LazyTask.Create(async () => (await subTask).result), false, p.Id, oldHash, oldHash), depndendOn: cache.inputIdToInsertedItesm[p.Id]);
+                            return (result: StageResult.CreateStageResult(this.Context, LazyTask.Create(async () => (await subTask).result), false, p.Id, oldHash, oldHash), depndendOn: cache.inputIdToInsertedItesm[p.Id]);
                         }
                     }
 
                     var (subResult, depndendOn) = await subTask;
-                    return (result: this.Context.CreateStageResult(subResult, subResult.Hash != oldHash, subResult.Id, subResult.Hash, subResult.Hash), depndendOn);
+                    return (result: StageResult.CreateStageResult(this.Context, subResult, subResult.Hash != oldHash, subResult.Id, subResult.Hash, subResult.Hash), depndendOn);
                 }));
 
                 return list;
@@ -121,7 +121,7 @@ namespace Nota.Site.Generator.Stages
                 ids = newCache.DocumentOrder.ToImmutableList();
             }
 
-            return this.Context.CreateStageResultList(LazyTask.Create(async () => (await task).Select<(StageResult<MarkdownDocument, string> result, string[] depndendOn), StageResult<MarkdownDocument, string>>(x => x.result).ToImmutableList()), hasChanges, ids, newCache, newCache.Hash);
+            return this.Context.CreateStageResultList(LazyTask.Create(async () => (await task).Select<(StageResult<MarkdownDocument, string> result, string[] depndendOn), StageResult<MarkdownDocument, string>>(x => x.result).ToImmutableList()), hasChanges, ids, newCache, newCache.Hash, result.Cache);
         }
 
 
@@ -191,7 +191,8 @@ namespace Nota.Site.Generator.Stages
 
     }
 
-    public class MarkdownInsertCache<TCache> where TCache : class
+    public class MarkdownInsertCache<TCache> : IHavePreviousCache<TCache>
+        where TCache : class
     {
         public TCache PreviousCache { get; set; }
         public Dictionary<string, string[]> inputIdToInsertedItesm { get; set; }

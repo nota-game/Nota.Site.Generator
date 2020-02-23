@@ -107,14 +107,14 @@ namespace Nota.Site.Generator
 
                 var contentRepo = configFile
                     .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
-                    .GitModul("Git for Content")
+                    .GitClone("Git for Content")
                     .Where(x => x.Id == "master") // for debuging 
                     ;
 
                 var schemaRepo = configFile
                     .Transform(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
                         .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
-                    .GitModul("Git for Schema");
+                    .GitClone("Git for Schema");
 
                 var layoutProvider = configFile
                     .Transform(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"), "Transform LayoutProvider from Config")
@@ -126,19 +126,10 @@ namespace Nota.Site.Generator
                     .FileSystem("static Filesystem");
 
 
-                var sassFiles = staticFilesInput.Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
-                    .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
 
-                var staticFiles = staticFilesInput
-                       .SetVariable(sassFiles)
-                       .Select(input =>
-                           input.If(x => Path.GetExtension(x.Id) == ".scss")
-                           .Then(x =>
-                               x.ToText()
-                               .GetVariable(sassFiles, (y, sass) => y.Sass(sass))
-                               .TextToStream())
-                           .Else(x => x.GetVariable(sassFiles, (y, _) => y))
-                       );
+
+
+
 
                 var generatorOptions = new GenerationOptions()
                 {
@@ -148,12 +139,11 @@ namespace Nota.Site.Generator
 
 
                 var contentFiles = contentRepo
-                    .Transform(x => x.With(x.Metadata.Remove<Stasistium.Stages.GitReposetoryMetadata>()), "Remove GitReposetoryMetadata form content for siteData")
                     .SelectMany(input =>
                     {
                         var startData = input
                         .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-                        .GitRefToFiles("Read Files from Git (Content)")
+                        .GitRefToFiles(name: "Read Files from Git (Content)")
                             .Sidecar()
                                 .For<BookMetadata>(".metadata")
                             ;
@@ -187,6 +177,47 @@ namespace Nota.Site.Generator
                         };
                         return context.CreateDocument(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
                     }, "make siteData to single element");
+
+
+
+
+                var sassFiles = staticFilesInput
+             .Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
+             .Select(x => x.ToText(name: "actual to text for scss"), "scss transfrom to text");
+
+                var staticFiles2 = staticFilesInput
+                       .SetVariable(sassFiles)
+                       .Select(input =>
+                           input.If(x => Path.GetExtension(x.Id) == ".scss")
+                           .Then(x =>
+                               x.ToText()
+                               .GetVariable(sassFiles, (y, sass) => y.Sass(sass))
+                               .TextToStream())
+                           .Else(x => x.GetVariable(sassFiles, (y, _) => y))
+                       )
+                .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files");
+
+
+
+
+                var razorProviderStatic = staticFiles2
+                    .FileProvider("Content", "Content file Provider")
+                    .Concat(layoutProvider, "Concat Content and layout FileProvider")
+                    .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider STATIC with ViewStart");
+
+                var staticFiles = staticFiles2
+                    .SetVariable(razorProviderStatic)
+                    .Select(input => input
+                        .If(x => Path.GetExtension(x.Id) == ".cshtml")
+                            .Then(x => x
+                                .GetVariable(razorProviderStatic, (y, provider) => y
+                                    .Razor(provider)
+                                    .TextToStream()
+                                    .Transform(doc => doc.WithId(Path.ChangeExtension(doc.Id, ".html")))))
+                            .Else(x => x.GetVariable(razorProviderStatic, (y, _) => y)));
+
+
+
 
 
 
@@ -242,7 +273,7 @@ namespace Nota.Site.Generator
                     var stiched = markdownRendered
                         .Concat(nonMarkdown)
                         .Transform(x => x.WithId($"{key}/{x.Id}"))
-                        .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>())))
+                        .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
                         .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
 
 
@@ -280,8 +311,9 @@ namespace Nota.Site.Generator
                                 .GetVariable(razorProvider, (y, provider) => y
                                     .Razor(provider).TextToStream()))
                             .Else(x => x.GetVariable(razorProvider, (y, _) => y)));
-                var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
 
+
+                var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
                 var schemaFiles = schemaRepo
                     .SelectMany(input =>
                      input
@@ -327,14 +359,14 @@ namespace Nota.Site.Generator
                     bool isRunning = true;
 
                     Console.CancelKeyPress += (sender, e) => isRunning = false;
-
+                    bool forceUpdate = false;
                     while (isRunning)
                     {
                         try
                         {
                             Console.Clear();
                             s.Restart();
-                            await g.UpdateFiles().ConfigureAwait(false);
+                            await g.UpdateFiles(forceUpdate).ConfigureAwait(false);
                             s.Stop();
                             context.Logger.Info($"Update Took {s.Elapsed}");
                         }
@@ -349,6 +381,8 @@ namespace Nota.Site.Generator
                         var key = Console.ReadKey(true);
                         if (key.Key == ConsoleKey.Q)
                             isRunning = false;
+                        forceUpdate = key.Key == ConsoleKey.U;
+
                     }
                     s.Restart();
                     await host.StopAsync();
@@ -487,8 +521,8 @@ namespace Nota.Site.Generator
             return MarkdownDocument.CreateBuilder()
                             .AddBlockParser<Blocks.HeaderBlock.HashParser>()
                             .AddBlockParser<Blocks.ListBlock.Parser>()
-                            //.AddBlockParser<Blocks.TableBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.ExtendedTableBlock.Parser>()
+                            .AddBlockParser<Blocks.TableBlock.Parser>()
                             .AddBlockParser<Blocks.QuoteBlock.Parser>()
                             .AddBlockParser<Blocks.LinkReferenceBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.InsertBlock.Parser>()
@@ -496,6 +530,8 @@ namespace Nota.Site.Generator
                             .AddBlockParser<Markdown.Blocks.YamlBlock<OrderMarkdownMetadata>.Parser>()
                             .AddBlockParser<Markdown.Blocks.YamlBlock<BookMetadata>.Parser>()
                             .AddBlockParser<Markdown.Blocks.SideNote.Parser>()
+                                .Before<TableBlock.Parser>()
+                                .Before<Markdown.Blocks.ExtendedTableBlock.Parser>()
 
                             .AddInlineParser<Inlines.BoldTextInline.Parser>()
                             .AddInlineParser<Inlines.ItalicTextInline.Parser>()

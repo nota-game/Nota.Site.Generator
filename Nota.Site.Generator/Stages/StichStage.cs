@@ -64,7 +64,7 @@ namespace Nota.Site.Generator
 
 
                     // check for wrong Pathes
-                    var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x=>x.Key);
+                    var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x => x.Key);
                     if (wrongPathes.Any())
                     {
                         throw this.Context.Exception($"The after pathes of following documents could not be resolved: {string.Join(", ", wrongPathes)}");
@@ -163,7 +163,7 @@ namespace Nota.Site.Generator
                         foreach (var item in documentsInPartition)
                         {
 
-                            list.Add(this.Context.CreateStageResult(item, true, item.Id, item.Hash, item.Hash));
+                            list.Add(StageResult.CreateStageResult(this.Context, item, true, item.Id, item.Hash, item.Hash));
                         }
 
 
@@ -302,7 +302,7 @@ namespace Nota.Site.Generator
                             foreach (var item in documentsInPartition)
                             {
                                 var oldHash = cachePartition?.Documents.FirstOrDefault(x => x.Id == item.Id).Hash;
-                                list.Add(this.Context.CreateStageResult(item, oldHash != item.Hash, item.Id, item.Hash, item.Hash));
+                                list.Add(StageResult.CreateStageResult(this.Context, item, oldHash != item.Hash, item.Id, item.Hash, item.Hash));
                             }
                         }
                         else
@@ -326,7 +326,7 @@ namespace Nota.Site.Generator
                                     var x = await baseTask;
                                     return x.First(x => x.Id == oldId && x.Hash == oldHash);
                                 });
-                                list.Add(this.Context.CreateStageResult(task, false, oldId, oldHash, oldHash));
+                                list.Add(StageResult.CreateStageResult(this.Context, task, false, oldId, oldHash, oldHash));
                             }
 
                         }
@@ -369,7 +369,7 @@ namespace Nota.Site.Generator
                         || performed.Any(x => x.HasChanges);
                 }
 
-                return this.Context.CreateStageResultList(performed, hasChanges, ids, newCache, newCache.Hash);
+                return this.Context.CreateStageResultList(performed, hasChanges, ids, newCache, newCache.Hash, result.Cache);
             }
             else
                 ids = cache.Partitions.SelectMany(x => x.Documents).Select(x => x.Id).ToImmutableList();
@@ -378,7 +378,7 @@ namespace Nota.Site.Generator
                 var temp = await task;
                 return temp.Item1;
             });
-            return this.Context.CreateStageResultList(actualTask, hasChanges, ids, cache, cache.Hash);
+            return this.Context.CreateStageResultList(actualTask, hasChanges, ids, cache, cache.Hash, result.Cache);
         }
 
         private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IDocument<MarkdownDocument>[] documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
@@ -484,7 +484,8 @@ namespace Nota.Site.Generator
         public (string Id, string Hash)[] Documents { get; set; }
     }
 
-    public class StichCache<TCache>
+    public class StichCache<TCache> : IHavePreviousCache<TCache>
+        where TCache : class
     {
         public TCache PreviousCache { get; set; }
 

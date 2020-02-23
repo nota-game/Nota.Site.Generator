@@ -36,7 +36,7 @@ namespace Stasistium.Stages
         protected override async Task<StageResult<TResult, IfCache<TInputCache, TCacheTrue, TCacheFalse>>> DoInternal(IfCache<TInputCache, TCacheTrue, TCacheFalse>? cache, OptionToken options)
         {
 
-            var result = await this.input.DoIt(cache?.PrviousCache, options);
+            var result = await this.input.DoIt(cache?.PreviousCache, options);
 
             var task = LazyTask.Create(async () =>
             {
@@ -97,7 +97,7 @@ namespace Stasistium.Stages
                 return temp.resultDocument;
             });
 
-            return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash);
+            return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash, result.Cache);
         }
 
 
@@ -113,13 +113,13 @@ namespace Stasistium.Stages
 
             protected override Task<StageResult<TInput, string>> DoInternal(string? cache, OptionToken options)
             {
-                return Task.FromResult(this.Context.CreateStageResult(this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
+                return Task.FromResult(StageResult.CreateStageResult(this.Context, this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
             }
         }
 
     }
 
-    public class IfCache<TInputCache, TCacheTrue, TCacheFalse>
+    public class IfCache<TInputCache, TCacheTrue, TCacheFalse> : IHavePreviousCache<TInputCache>
         where TInputCache : class
         where TCacheTrue : class
         where TCacheFalse : class
@@ -130,14 +130,14 @@ namespace Stasistium.Stages
         }
         public IfCache(TInputCache prviousCache, TCacheTrue? trueCache, TCacheFalse? falseCache, string documentId, string hash)
         {
-            this.PrviousCache = prviousCache ?? throw new ArgumentNullException(nameof(prviousCache));
+            this.PreviousCache = prviousCache ?? throw new ArgumentNullException(nameof(prviousCache));
             this.TrueCache = trueCache;
             this.FalseCache = falseCache;
             this.DocumentId = documentId ?? throw new ArgumentNullException(nameof(documentId));
             this.Hash = hash ?? throw new ArgumentNullException(nameof(hash));
         }
 
-        public TInputCache PrviousCache { get; set; }
+        public TInputCache PreviousCache { get; set; }
         public TCacheTrue? TrueCache { get; set; }
         public TCacheFalse? FalseCache { get; set; }
         public string DocumentId { get; set; }
