@@ -1,7 +1,7 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
-using Microsoft.Toolkit.Parsers.Markdown.Blocks;
-using Microsoft.Toolkit.Parsers.Markdown.Helpers;
-using Microsoft.Toolkit.Parsers.Markdown.Inlines;
+﻿using AdaptMark.Parsers.Markdown;
+using AdaptMark.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown.Helpers;
+using AdaptMark.Parsers.Markdown.Inlines;
 using Nota.Site.Generator.Markdown.Blocks;
 using System;
 using System.Collections.Generic;
@@ -12,7 +12,7 @@ using System.Xml;
 
 namespace Nota.Site.Generator.Markdown
 {
-    public class XmlSelectorBlock : Microsoft.Toolkit.Parsers.Markdown.Blocks.MarkdownBlock
+    public class XmlSelectorBlock : AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock
     {
         public XmlSelectorBlock(XmlInline header, List<MarkdownBlock> blocks)
         {
@@ -25,57 +25,61 @@ namespace Nota.Site.Generator.Markdown
 
         public new class Parser : Parser<XmlSelectorBlock>
         {
-            protected override BlockParseResult<XmlSelectorBlock>? ParseInternal(string markdown, int startOfLine, int firstNonSpace, int endOfFirstLine, int maxStart, int maxEnd, bool lineStartsNewParagraph, MarkdownDocument document)
+            protected override BlockParseResult<XmlSelectorBlock>? ParseInternal(in LineBlock markdown, int startLine, bool lineStartsNewParagraph, MarkdownDocument document)
             {
-
-                if (markdown[startOfLine] != '/')
-                    return null;
-
-                var lines = new LineSplitter(markdown.AsSpan(startOfLine, maxEnd - startOfLine));
-                var buffer = new StringBuilder();
-                bool isHeader = true;
-                int lastend = 0;
-                XmlInline? header = null;
-                while (lines.TryGetNextLine(out var line, out var start, out var end))
-                {
-                    lastend = end;
-                    if (line.Length == 0 || line[0] != '/')
-                        break;
-                    int textStart = 1;
-                    if (line.Length >= 2 && line[1] == ' ')
-                        textStart = 2;
-                    var text = line[textStart..];
-
-                    if (isHeader)
-                    {
-                        isHeader = false;
-
-                        var parsed = document.ParseInlineChildren(line.ToString(), 0, line.Length, document.InlineParsers.ToArray().Where(x => !(x is XmlInline.Parser)).Select(x => x.GetType()));
-                        if (parsed.Count != 1 && parsed.First() is XmlInline h)
-                            header = h;
-                        else
-                        {
-                            return null;
-                        }
-                    }
-                    else
-                    {
-                        buffer.Append(text);
-                        buffer.AppendLine();
-                    }
-                }
-                if (header is null)
-                    return null;
-
-                var blocks = document.ParseBlocks(buffer.ToString(), 0, buffer.Length, out _);
-                var result = new XmlSelectorBlock(header, blocks);
-
-                return BlockParseResult.Create(result, startOfLine, lastend + startOfLine);
+                return null;
             }
+            //protected override BlockParseResult<XmlSelectorBlock>? ParseInternal(string markdown, int startOfLine, int firstNonSpace, int endOfFirstLine, int maxStart, int maxEnd, bool lineStartsNewParagraph, MarkdownDocument document)
+            //{
+
+            //    if (markdown[startOfLine] != '/')
+            //        return null;
+
+            //    var lines = new LineSplitter(markdown.AsSpan(startOfLine, maxEnd - startOfLine));
+            //    var buffer = new StringBuilder();
+            //    bool isHeader = true;
+            //    int lastend = 0;
+            //    XmlInline? header = null;
+            //    while (lines.TryGetNextLine(out var line, out var start, out var end))
+            //    {
+            //        lastend = end;
+            //        if (line.Length == 0 || line[0] != '/')
+            //            break;
+            //        int textStart = 1;
+            //        if (line.Length >= 2 && line[1] == ' ')
+            //            textStart = 2;
+            //        var text = line[textStart..];
+
+            //        if (isHeader)
+            //        {
+            //            isHeader = false;
+
+            //            var parsed = document.ParseInlineChildren(line.ToString(), 0, line.Length, document.InlineParsers.ToArray().Where(x => !(x is XmlInline.Parser)).Select(x => x.GetType()));
+            //            if (parsed.Count != 1 && parsed.First() is XmlInline h)
+            //                header = h;
+            //            else
+            //            {
+            //                return null;
+            //            }
+            //        }
+            //        else
+            //        {
+            //            buffer.Append(text);
+            //            buffer.AppendLine();
+            //        }
+            //    }
+            //    if (header is null)
+            //        return null;
+
+            //    var blocks = document.ParseBlocks(buffer.ToString(), 0, buffer.Length, out _);
+            //    var result = new XmlSelectorBlock(header, blocks);
+
+            //    return BlockParseResult.Create(result, startOfLine, lastend + startOfLine);
+            //}
         }
 
 
-        public override string ToString()
+        protected override string StringRepresentation()
         {
             var builder = new StringBuilder();
 
@@ -120,61 +124,65 @@ namespace Nota.Site.Generator.Markdown
 
         public new class Parser : Parser<XmlInline>
         {
-            protected override InlineParseResult<XmlInline>? ParseInternal(string markdown, int minStart, int tripPos, int maxEnd, MarkdownDocument document, IEnumerable<Type> ignoredParsers)
+            protected override InlineParseResult<XmlInline>? ParseInternal(in LineBlock markdown, in LineBlockPosition tripPos, MarkdownDocument document, HashSet<Type> ignoredParsers)
             {
-                var endOf = markdown.IndexOf('}', tripPos);
-                if (endOf == -1 && endOf < maxEnd)
-                    return null;
-
-                var select = markdown.Substring(tripPos, endOf - tripPos);
-
-
-
-                string? context = null;
-                var start = endOf + 1;
-                if (start < maxEnd && markdown[start] == '(')
-                {
-                    endOf = markdown.IndexOf(')', start);
-                    if (endOf == -1 && endOf < maxEnd)
-                    {
-                        context = markdown.Substring(start, endOf - start);
-                    }
-                    else
-                        return null;
-                    start = endOf + 1;
-                }
-
-                string? id = null;
-                if (start < maxEnd && markdown[start] == '[')
-                {
-                    endOf = markdown.IndexOf(']', start);
-                    if (endOf == -1 && endOf < maxEnd)
-                    {
-                        context = markdown.Substring(start, endOf - start);
-                    }
-                    return null;
-                }
-
-
-
-                if (select.Contains('\n', StringComparison.InvariantCulture)
-                    || select.Contains('\r', StringComparison.InvariantCulture)
-                    || (id?.Contains('\n', StringComparison.InvariantCulture) ?? false)
-                    || (id?.Contains('\r', StringComparison.InvariantCulture) ?? false)
-                    || (select?.Contains('\n', StringComparison.InvariantCulture) ?? false)
-                    || (select?.Contains('\r', StringComparison.InvariantCulture) ?? false))
-                {
-                    return null;
-                }
-
-
-                return InlineParseResult.Create(new XmlInline(select, context, id), tripPos, endOf);
+                return null;
             }
+            //protected override InlineParseResult<XmlInline>? ParseInternal(string markdown, int minStart, int tripPos, int maxEnd, MarkdownDocument document, IEnumerable<Type> ignoredParsers)
+            //{
+            //    var endOf = markdown.IndexOf('}', tripPos);
+            //    if (endOf == -1 && endOf < maxEnd)
+            //        return null;
 
-            public override IEnumerable<char> TripChar => "{";
+            //    var select = markdown.Substring(tripPos, endOf - tripPos);
+
+
+
+            //    string? context = null;
+            //    var start = endOf + 1;
+            //    if (start < maxEnd && markdown[start] == '(')
+            //    {
+            //        endOf = markdown.IndexOf(')', start);
+            //        if (endOf == -1 && endOf < maxEnd)
+            //        {
+            //            context = markdown.Substring(start, endOf - start);
+            //        }
+            //        else
+            //            return null;
+            //        start = endOf + 1;
+            //    }
+
+            //    string? id = null;
+            //    if (start < maxEnd && markdown[start] == '[')
+            //    {
+            //        endOf = markdown.IndexOf(']', start);
+            //        if (endOf == -1 && endOf < maxEnd)
+            //        {
+            //            context = markdown.Substring(start, endOf - start);
+            //        }
+            //        return null;
+            //    }
+
+
+
+            //    if (select.Contains('\n', StringComparison.InvariantCulture)
+            //        || select.Contains('\r', StringComparison.InvariantCulture)
+            //        || (id?.Contains('\n', StringComparison.InvariantCulture) ?? false)
+            //        || (id?.Contains('\r', StringComparison.InvariantCulture) ?? false)
+            //        || (select?.Contains('\n', StringComparison.InvariantCulture) ?? false)
+            //        || (select?.Contains('\r', StringComparison.InvariantCulture) ?? false))
+            //    {
+            //        return null;
+            //    }
+
+
+            //    return InlineParseResult.Create(new XmlInline(select, context, id), tripPos, endOf);
+            //}
+
+            public override ReadOnlySpan<char> TripChar => "{";
         }
 
-        public override string ToString()
+        protected override string StringRepresentation()
         {
             return $"{{{this.Select}}}({this.Context ?? string.Empty})[{this.Id ?? string.Empty}]";
         }

@@ -1,4 +1,4 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
+﻿using AdaptMark.Parsers.Markdown;
 using Stasistium.Documents;
 using System.Threading.Tasks;
 using System.Collections.Immutable;
@@ -134,17 +134,17 @@ namespace Nota.Site.Generator.Stages
                 return DeepCopy(document.Blocks, pathResolver, performed);
             }
 
-            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(IEnumerable<Microsoft.Toolkit.Parsers.Markdown.Blocks.MarkdownBlock> blocks, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> performed)
+            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(IEnumerable<AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock> blocks, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> performed)
             {
                 await foreach (var item in blocks.ToAsyncEnumerable().SelectMany(b => DeepCopy(b, pathResolver, performed)))
                     yield return item;
 
             }
-            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(Microsoft.Toolkit.Parsers.Markdown.Blocks.MarkdownBlock block, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> lookup)
+            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock block, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> lookup)
             {
                 switch (block)
                 {
-                    case Microsoft.Toolkit.Parsers.Markdown.Blocks.ListBlock listBlock:
+                    case AdaptMark.Parsers.Markdown.Blocks.ListBlock listBlock:
                         {
                             await foreach (var item in listBlock.Items.ToAsyncEnumerable().SelectMany(x => DeepCopy(x.Blocks, pathResolver, lookup)))
                                 yield return item;

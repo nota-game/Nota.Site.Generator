@@ -1,5 +1,5 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown.Blocks;
-using Microsoft.Toolkit.Parsers.Markdown.Inlines;
+﻿using AdaptMark.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown.Inlines;
 using Stasistium.Stages;
 using System.Linq;
 using System.Text;

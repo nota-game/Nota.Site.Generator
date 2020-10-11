@@ -9,6 +9,15 @@ using System.Threading.Tasks;
 
 namespace Stasistium.Stages
 {
+    public static partial class StageExtension
+    {
+        public static EmbededXmpStage<T> EmbededXmp<T>(this StageBase<Stream, T> input, string? name = null)
+            where T : class
+        {
+            return new EmbededXmpStage<T>(input, input.Context, name);
+        }
+    }
+
     public class EmbededXmpStage<T> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List0StageBase<Stream, T, Stream>
         where T : class
     {

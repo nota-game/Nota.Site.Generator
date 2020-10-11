@@ -1,6 +1,6 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
-using Microsoft.Toolkit.Parsers.Markdown.Blocks;
-using Microsoft.Toolkit.Parsers.Markdown.Inlines;
+﻿using AdaptMark.Parsers.Markdown;
+using AdaptMark.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown.Inlines;
 using Nota.Site.Generator.Markdown.Blocks;
 using Stasistium;
 using Stasistium.Core;

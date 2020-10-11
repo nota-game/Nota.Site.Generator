@@ -1,5 +1,5 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
-using Microsoft.Toolkit.Parsers.Markdown.Blocks;
+﻿using AdaptMark.Parsers.Markdown;
+using AdaptMark.Parsers.Markdown.Blocks;
 using System;
 using System.Collections.Generic;
 using Stasistium.Documents;
@@ -18,7 +18,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         public IDocument<MarkdownDocument> OriginalDocument { get; set; }
 
-        public override string ToString()
+        protected override string StringRepresentation()
         {
 
             return $"~[{this.OriginalDocument.Id}]\n" + string.Join("\n\n", this.Blocks);

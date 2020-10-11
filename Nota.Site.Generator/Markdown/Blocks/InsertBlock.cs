@@ -1,11 +1,11 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
-using Microsoft.Toolkit.Parsers.Markdown.Blocks;
-using Microsoft.Toolkit.Parsers.Markdown.Helpers;
+﻿using AdaptMark.Parsers.Markdown;
+using AdaptMark.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
-using Microsoft.Toolkit.Parsers.Markdown.Inlines;
+using AdaptMark.Parsers.Markdown.Inlines;
 using Stasistium.Documents;
 using Stasistium.Stages;
 using Stasistium;
@@ -25,29 +25,28 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         public new class Parser : Parser<InsertBlock>
         {
-            protected override BlockParseResult<InsertBlock>? ParseInternal(string markdown, int startOfLine, int firstNonSpace, int endOfFirstLine, int maxStart, int maxEnd, bool lineStartsNewParagraph, MarkdownDocument document)
+            protected override BlockParseResult<InsertBlock>? ParseInternal(in LineBlock markdown, int startLine, bool lineStartsNewParagraph, MarkdownDocument document)
             {
-                if (firstNonSpace + 2 > maxEnd
-                    || markdown[firstNonSpace] != '~'
-                    || markdown[firstNonSpace + 1] != '['
-                    || !lineStartsNewParagraph)
-                {
-                    return null;
-                }
 
-                var index = markdown.IndexOf("]", firstNonSpace, endOfFirstLine - firstNonSpace, StringComparison.InvariantCulture);
-                if (index == -1)
+                var line = markdown[startLine];
+                var nonspace = line.IndexOfNonWhiteSpace();
+                if (nonspace == -1 || nonspace + 2 >= line.Length || line[nonspace] != '~' || line[nonspace] != '[')
                     return null;
 
-                foreach (var c in markdown.AsSpan(index + 1, endOfFirstLine - index - 1))
-                    if (!char.IsWhiteSpace(c))
-                        return null;
+                line = line.Slice(nonspace + 1);
 
-                return BlockParseResult.Create(new InsertBlock(markdown.Substring(firstNonSpace + 2, index - firstNonSpace - 2)), firstNonSpace, index + 1);
+                var findClosing = line.FindClosingBrace();
+
+                if (findClosing == -1)
+                    return null;
+
+                var reference = line.Slice(1, findClosing);
+
+                return BlockParseResult.Create(new InsertBlock(reference.ToString()), startLine, 1);
             }
         }
-
-        public override string ToString()
+        
+        protected override string StringRepresentation()
         {
             return $"~[{this.Reference}]";
         }
@@ -177,7 +176,6 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     return new ImageInline()
                     {
                         ReferenceId = imageInline.ReferenceId,
-                        RenderUrl = imageInline.RenderUrl,
                         Text = imageInline.Text,
                         Tooltip = imageInline.Tooltip,
                         Url = imageInline.Url

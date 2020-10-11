@@ -1,4 +1,4 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
+﻿using AdaptMark.Parsers.Markdown;
 using Nota.Site.Generator.Markdown.Blocks;
 using Stasistium;
 using Stasistium.Documents;

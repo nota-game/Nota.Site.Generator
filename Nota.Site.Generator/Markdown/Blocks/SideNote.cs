@@ -1,6 +1,6 @@
-﻿using Microsoft.Toolkit.Parsers.Markdown;
-using Microsoft.Toolkit.Parsers.Markdown.Blocks;
-using Microsoft.Toolkit.Parsers.Markdown.Helpers;
+﻿using AdaptMark.Parsers.Markdown;
+using AdaptMark.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -36,85 +36,181 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
             private readonly Regex distributionPatter = new Regex(@"(?<id>\S+)\s+(?<distribution>\d)", RegexOptions.Compiled);
 
-            protected override BlockParseResult<SideNote>? ParseInternal(string markdown, int startOfLine, int firstNonSpace, int endOfFirstLine, int maxStart, int maxEnd, bool lineStartsNewParagraph, MarkdownDocument document)
+            protected override BlockParseResult<SideNote>? ParseInternal(in LineBlock markdown, int startLine, bool lineStartsNewParagraph, MarkdownDocument document)
             {
-                if (markdown[startOfLine] != '|')
+                var firstLine = markdown[startLine];
+                var startOfTable = firstLine.IndexOfNonWhiteSpace();
+                if (startOfTable != -1 && firstLine[startOfTable] != '|')
                     return null;
 
-                var lines = new LineSplitter(markdown.AsSpan(startOfLine, maxEnd - startOfLine));
-                //var distributionList = ImmutableArray<>
-                var builder = ImmutableArray<(string id, byte distribution)>.Empty.ToBuilder();
-                string? id = null;
-                SideNoteType? type = null;
-                var buffer = new StringBuilder();
-                bool header = true;
                 int lastend = 0;
-                while (lines.TryGetNextLine(out var line, out var start, out var end))
+                var header = markdown.RemoveFromLine((l, index) =>
                 {
-                    lastend = end;
-                    if (line.Length == 0 || line[0] != '|')
-                        break;
-                    int textStart = 1;
-                    if (line.Length >= 2 && line[1] == ' ')
-                        textStart = 2;
-                    var text = line[textStart..];
+                    if (l.Length == 0)
+                        return (0, 0, true, true);
 
-                    if (line.Length >= 4 && line[1] == '-' && line[2] == '-' && line[3] == '-')
+                    var start = l.IndexOfNonWhiteSpace();
+                    if (start == -1)
+                        return (0, 0, true, true);
+
+                    if (l[start] != '|')
+                        return (0, 0, true, true);
+                    bool hasDash = false;
+                    bool allDashOrWhitespaec = true;
+                    for (int i = start + 1; i < l.Length; i++)
                     {
-                        var rest = line.Slice(1);
-                        for (int i = 0; i < rest.Length; i++)
+                        if (l[i] == '-')
                         {
-                            if (rest[i] != '-' && !char.IsWhiteSpace(rest[i]))
-                                return null;
+                            hasDash = true;
+                            continue;
                         }
 
-                        header = false;
-                        continue; // we do not use this line anymore
+                        if (char.IsWhiteSpace(l[i]))
+                            continue;
+
+                        allDashOrWhitespaec = false;
                     }
 
-                    if (header)
+                    if (allDashOrWhitespaec && hasDash)
+                        return (0, 0, true, true);
+
+
+                    var rest = l.Slice(start + 1);
+                    var contentStart = rest.IndexOfNonWhiteSpace() + start + 1;
+
+                    return (contentStart, l.Length - contentStart, false, false);
+                });
+
+                if (header.LineCount == 0)
+                    return null;
+
+                var rest = markdown.SliceLines(header.LineCount);
+
+                if (rest.LineCount == 0)
+                    return null;
+
+                var seperatorLine = rest[0];
+                var nonSpaceSeperatorLine = seperatorLine.IndexOfNonWhiteSpace();
+                if (nonSpaceSeperatorLine == -1)
+                    return null;
+                seperatorLine = seperatorLine.Slice(nonSpaceSeperatorLine + 1);
+
+                if (seperatorLine.Length == 0)
+                    return null;
+
+                for (int i = 0; i < seperatorLine.Length; i++)
+                {
+                    if (seperatorLine[i] == '-')
+                        continue;
+
+                    if (char.IsWhiteSpace(seperatorLine[i]))
+                        continue;
+
+                    return null;
+                }
+
+                rest = rest.SliceLines(1);
+
+                var body = rest.RemoveFromLine((l, index) =>
+                {
+                    if (l.Length == 0)
+                        return (0, 0, true, true);
+
+                    var start = l.IndexOfNonWhiteSpace();
+                    if (start == -1)
+                        return (0, 0, true, true);
+
+                    if (l[start] != '|')
+                        return (0, 0, true, true);
+
+                    var rest = l.Slice(start + 1);
+                    var contentStart = rest.IndexOfNonWhiteSpace() + start + 1;
+
+                    return (contentStart, l.Length - contentStart, false, false);
+                });
+
+                if (!Enum.TryParse<SideNoteType>(header[0].ToString(), true, out var sideNoteType))
+                    sideNoteType = SideNoteType.Undefined;
+
+                var builder = ImmutableArray<(string id, byte distribution)>.Empty.ToBuilder();
+                string? id = null;
+
+
+                for (int i = 1; i < header.LineCount; i++)
+                {
+                    var currentLine = header[i];
+                    if (currentLine.Length == 0)
+                        return null;
+                    if (currentLine[0] == '[')
                     {
+                        var closing = currentLine.FindClosingBrace();
+                        if (closing == -1)
+                            return null;
 
-                        if (text.StartsWith("[") && text.EndsWith("]"))
-                        {
-                            if (id != null)
-                                throw new InvalidOperationException($"Id was already set to {id} (tried to set to {text.ToString()})");
-                            id = text.Slice(1, text.Length - 2).ToString();
-
-                        }
-                        else if (!type.HasValue)
-                        {
-                            if (!Enum.TryParse<SideNoteType>(text.ToString(), out var parsed))
-                                parsed = SideNoteType.Undefined;
-                            type = parsed;
-                        }
-                        else
-                        {
-                            var matches = this.distributionPatter.Matches(text.ToString());
-
-                            builder.AddRange(matches.Select(x => (x.Groups["id"].Value, byte.Parse(x.Groups["distribution"].Value))));
-                        }
+                        id = currentLine.Slice(1, closing - 1).ToString();
                     }
                     else
                     {
-                        buffer.Append(text);
-                        buffer.AppendLine();
+                        var toParse = currentLine;
+                        while (true)
+                        {
+                            var entryStart = toParse.IndexOfNonWhiteSpace();
+                            toParse = toParse.Slice(entryStart);
+
+                            var end = toParse.IndexOfNexWhiteSpace();
+                            if (end == -1)
+                                end = toParse.Length;
+
+                            var entry = toParse.Slice(0, end);
+
+                            var collumnPos = entry.IndexOf(':');
+
+                            if (collumnPos == -1)
+                                return null;
+
+                            var firstPart = entry.Slice(0, collumnPos);
+                            var seccondPart = entry.Slice(collumnPos + 1);
+
+                            if (!byte.TryParse(seccondPart.ToString(), out var value))
+                                return null;
+
+                            builder.Add((firstPart.ToString(), value));
+
+                            toParse = toParse.Slice(end);
+                            if (toParse.IsWhiteSpace())
+                                break;
+                        }
                     }
                 }
 
-                if (header)
-                    return null;
+                var test = body.ToString();
+                var otherTest = new LineBlock(test.AsSpan());
 
-                var blocks = document.ParseBlocks(buffer.ToString(), 0, buffer.Length, out _);
-                var result = new SideNote(id ?? string.Empty, type ?? SideNoteType.Undefined, builder, blocks);
+                
 
-                return BlockParseResult.Create(result, startOfLine, lastend + startOfLine);
+                for (int i = 0; i < otherTest.LineCount; i++)
+                {
+                    var originalLine = body[i];
+                    var newLine = otherTest[i];
+
+                    var originalLine2 = originalLine.ToString();
+                    var newLine2 = newLine.ToString();
+
+
+                }
+
+
+                var blocks = document.ParseBlocks(otherTest);
+                var blocks2 = document.ParseBlocks(body);
+                var result = new SideNote(id ?? string.Empty, sideNoteType, builder.ToImmutable(), blocks);
+
+                return BlockParseResult.Create(result, startLine, header.LineCount + 1 + body.LineCount);
             }
 
 
         }
 
-        public override string ToString()
+        protected override string StringRepresentation()
         {
             var builder = new StringBuilder();
 

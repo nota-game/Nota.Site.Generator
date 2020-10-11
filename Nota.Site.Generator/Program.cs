@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Toolkit.Parsers.Markdown;
-using Microsoft.Toolkit.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown;
+using AdaptMark.Parsers.Markdown.Blocks;
 using Stasistium;
 using Stasistium.Documents;
 using System;
@@ -11,8 +11,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Westwind.AspNetCore.LiveReload;
-using Blocks = Microsoft.Toolkit.Parsers.Markdown.Blocks;
-using Inlines = Microsoft.Toolkit.Parsers.Markdown.Inlines;
+using Blocks = AdaptMark.Parsers.Markdown.Blocks;
+using Inlines = AdaptMark.Parsers.Markdown.Inlines;
 
 namespace Nota.Site.Generator
 {
@@ -32,6 +32,7 @@ namespace Nota.Site.Generator
         /// The Main Method
         /// </summary>
         /// <param name="configuration">Path to the configuration file (json)</param>
+        /// <param name="serve">Set to start dev server</param>
         static async Task Main(FileInfo? configuration = null, bool serve = false)
         {
 
@@ -109,6 +110,7 @@ namespace Nota.Site.Generator
                     .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
                     .GitClone("Git for Content")
                     .Where(x => x.Id == "master") // for debuging 
+                    .Where(x => x.Id == "master") // for debuging 
                     ;
 
                 var schemaRepo = configFile
@@ -127,7 +129,20 @@ namespace Nota.Site.Generator
 
 
 
-
+                var licesnseFIles = contentRepo.SelectMany(input =>
+                    input.GitRefToFiles(name: "Read Files from Git (Licenses)")
+                    .Where(x =>
+                    {
+                        var extension = Path.GetExtension(x.Id);
+                        return extension != ".html"
+                            && extension != ".cshtml"
+                            && extension != ".css"
+                            && extension != ".scss"
+                            && extension != ".js"
+                            && extension != ".md"
+                            ;
+                    })
+                 );
 
 
 
@@ -148,7 +163,7 @@ namespace Nota.Site.Generator
                                 .For<BookMetadata>(".metadata")
                             ;
                         return startData;
-                    });
+                    }, "Select Content Files from Ref");
 
 
                 var siteData = contentFiles
@@ -369,6 +384,9 @@ namespace Nota.Site.Generator
                             await g.UpdateFiles(forceUpdate).ConfigureAwait(false);
                             s.Stop();
                             context.Logger.Info($"Update Took {s.Elapsed}");
+                            var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+                            foreach (var item in feature.Addresses)
+                                Console.WriteLine($"Listinging to: {item}");
                         }
                         catch (Exception e)
                         {
@@ -533,11 +551,14 @@ namespace Nota.Site.Generator
                                 .Before<TableBlock.Parser>()
                                 .Before<Markdown.Blocks.ExtendedTableBlock.Parser>()
 
-                            .AddInlineParser<Inlines.BoldTextInline.Parser>()
-                            .AddInlineParser<Inlines.ItalicTextInline.Parser>()
+                            .AddInlineParser<Inlines.BoldTextInline.ParserAsterix>()
+                            .AddInlineParser<Inlines.BoldTextInline.ParserUnderscore>()
+                            .AddInlineParser<Inlines.ItalicTextInline.ParserAsterix>()
+                            .AddInlineParser<Inlines.ItalicTextInline.ParserUnderscore>()
                             .AddInlineParser<Inlines.EmojiInline.Parser>()
                             .AddInlineParser<Inlines.ImageInline.Parser>()
-                            .AddInlineParser<Inlines.MarkdownLinkInline.Parser>()
+                            .AddInlineParser<Inlines.MarkdownLinkInline.LinkParser>()
+                            .AddInlineParser<Inlines.MarkdownLinkInline.ReferenceParser>()
                             .AddInlineParser<Inlines.StrikethroughTextInline.Parser>()
                             .AddInlineParser<Inlines.LinkAnchorInline.Parser>()
 
