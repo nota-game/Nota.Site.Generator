@@ -13,9 +13,15 @@ using System.Threading.Tasks;
 using Westwind.AspNetCore.LiveReload;
 using Blocks = AdaptMark.Parsers.Markdown.Blocks;
 using Inlines = AdaptMark.Parsers.Markdown.Inlines;
+using Nota.Site.Generator.Stages;
 
 namespace Nota.Site.Generator
 {
+
+    class AllDocumentsThatAreDependedOn
+    {
+        public string[] DependsOn { get; set; }
+    }
     class Program
     {
         private static IWebHost? host;
@@ -110,7 +116,7 @@ namespace Nota.Site.Generator
                     .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
                     .GitClone("Git for Content")
                     .Where(x => x.Id == "master") // for debuging 
-                    .Where(x => x.Id == "master") // for debuging 
+                                                //.Where(x => true) // for debuging 
                     ;
 
                 var schemaRepo = configFile
@@ -256,7 +262,7 @@ namespace Nota.Site.Generator
                         .YamlMarkdownToDocumentMetadata()
                             .For<BookMetadata>();
 
-                    var markdown = input
+                    var insertedMarkdown = input
                         .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                         .Select(data =>
                         data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
@@ -268,7 +274,21 @@ namespace Nota.Site.Generator
                             .YamlMarkdownToDocumentMetadata()
                                         .For<OrderMarkdownMetadata>()
                                         )
-                        .InsertMarkdown()
+                        .InsertMarkdown();
+
+                    var insertedDocuments = insertedMarkdown.ListToSingle(x =>
+                    {
+                        var values = x.SelectMany(y => y.Metadata.TryGetValue<DependendUponMetadata>()?.DependsOn ?? Array.Empty<string>()).Distinct().Where(z => z != null).ToArray();
+                        var context = x.First().Context;
+                        return context.CreateDocument(values, context.GetHashForObject(values), "documentIdsThatAreInserted");
+                    })
+                        ;
+
+                    var markdown = insertedMarkdown
+                    // we will remove all docments that are inserted in another.
+                    .Merge(insertedDocuments, (doc, m) => doc.With(doc.Metadata.Add(new AllDocumentsThatAreDependedOn() { DependsOn = m.Value })))
+                    .Where(x => !x.Metadata.GetValue<AllDocumentsThatAreDependedOn>().DependsOn.Contains(x.Id))
+                    .Transform(x => x.With(x.Metadata.Remove<AllDocumentsThatAreDependedOn>())) // we remove it so it will late not show changes in documents that do not have changes
                         .Stich("stich")
                         ;
                     var nonMarkdown = input
@@ -402,6 +422,7 @@ namespace Nota.Site.Generator
                         forceUpdate = key.Key == ConsoleKey.U;
 
                     }
+                    Console.WriteLine("Initiate Shutdown");
                     s.Restart();
                     await host.StopAsync();
 
