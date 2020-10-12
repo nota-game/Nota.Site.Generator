@@ -183,25 +183,8 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     }
                 }
 
-                var test = body.ToString();
-                var otherTest = new LineBlock(test.AsSpan());
-
                 
-
-                for (int i = 0; i < otherTest.LineCount; i++)
-                {
-                    var originalLine = body[i];
-                    var newLine = otherTest[i];
-
-                    var originalLine2 = originalLine.ToString();
-                    var newLine2 = newLine.ToString();
-
-
-                }
-
-
-                var blocks = document.ParseBlocks(otherTest);
-                var blocks2 = document.ParseBlocks(body);
+                var blocks = document.ParseBlocks(body);
                 var result = new SideNote(id ?? string.Empty, sideNoteType, builder.ToImmutable(), blocks);
 
                 return BlockParseResult.Create(result, startLine, header.LineCount + 1 + body.LineCount);
