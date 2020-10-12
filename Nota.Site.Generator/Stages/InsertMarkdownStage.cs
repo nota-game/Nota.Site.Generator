@@ -12,6 +12,11 @@ using System.Linq;
 
 namespace Nota.Site.Generator.Stages
 {
+
+    public class DependendUponMetadata
+    {
+        public string[] DependsOn { get; set; }
+    }
     public class InsertMarkdownStage<TSingleCache, TListItemCache, TListCache> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List1StageBase<MarkdownDocument, TSingleCache, MarkdownDocument, TListItemCache, TListCache, MarkdownDocument>
         where TSingleCache : class
         where TListItemCache : class
@@ -63,7 +68,7 @@ namespace Nota.Site.Generator.Stages
                         var subPerformed = await p.Perform;
 
                         var pathResolver = new RelativePathResolver(subPerformed.Id, performed.Select(x => x.Id));
-                        var resplvedDependencys = await BlockInsertDependency.Resolve(subPerformed.Value, pathResolver, performedLookup).ToArrayAsync();
+                        var resplvedDependencys = await BlockInsertDependency.Resolve(this.Context, subPerformed.Value, pathResolver, performedLookup).ToArrayAsync();
 
                         var resolver = new InserBlockResolver(pathResolver, resplvedDependencys, this.Context);
                         var resolvedDocument = resolver.Resolve(subPerformed.Value);
@@ -90,6 +95,7 @@ namespace Nota.Site.Generator.Stages
                     }
 
                     var (subResult, depndendOn) = await subTask;
+                    subResult = subResult.With(subResult.Metadata.Add(new DependendUponMetadata() { DependsOn = depndendOn }));
                     return (result: StageResult.CreateStageResult(this.Context, subResult, subResult.Hash != oldHash, subResult.Id, subResult.Hash, subResult.Hash), depndendOn);
                 }));
 
@@ -129,24 +135,24 @@ namespace Nota.Site.Generator.Stages
         {
 
 
-            public static IAsyncEnumerable<IDocument<MarkdownDocument>> Resolve(MarkdownDocument document, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> performed)
+            public static IAsyncEnumerable<IDocument<MarkdownDocument>> Resolve(IGeneratorContext context, MarkdownDocument document, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> performed)
             {
-                return DeepCopy(document.Blocks, pathResolver, performed);
+                return DeepCopy(context, document.Blocks, pathResolver, performed);
             }
 
-            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(IEnumerable<AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock> blocks, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> performed)
+            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(IGeneratorContext context, IEnumerable<AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock> blocks, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> performed)
             {
-                await foreach (var item in blocks.ToAsyncEnumerable().SelectMany(b => DeepCopy(b, pathResolver, performed)))
+                await foreach (var item in blocks.ToAsyncEnumerable().SelectMany(b => DeepCopy(context, b, pathResolver, performed)))
                     yield return item;
 
             }
-            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock block, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> lookup)
+            private static async IAsyncEnumerable<IDocument<MarkdownDocument>> DeepCopy(IGeneratorContext context, AdaptMark.Parsers.Markdown.Blocks.MarkdownBlock block, RelativePathResolver pathResolver, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> lookup)
             {
                 switch (block)
                 {
                     case AdaptMark.Parsers.Markdown.Blocks.ListBlock listBlock:
                         {
-                            await foreach (var item in listBlock.Items.ToAsyncEnumerable().SelectMany(x => DeepCopy(x.Blocks, pathResolver, lookup)))
+                            await foreach (var item in listBlock.Items.ToAsyncEnumerable().SelectMany(x => DeepCopy(context, x.Blocks, pathResolver, lookup)))
                                 yield return item;
                             break;
                         }
@@ -154,13 +160,20 @@ namespace Nota.Site.Generator.Stages
 
                     case InsertBlock insertBlock:
                         {
-                            var resolvedPath = pathResolver[insertBlock.Reference] ?? throw new InvalidOperationException($"Did not found Path {insertBlock.Reference}.");
+
+
+                            var resolvedPath = pathResolver[insertBlock.Reference];
+                            if (resolvedPath is null)
+                            {
+                                context.Logger.Error($"Did not found Path { insertBlock.Reference} to insert.");
+                                yield break;
+                            }
                             if (!lookup.TryGetValue(resolvedPath, out var result))
                                 throw new InvalidOperationException($"Did not found stage result with ID {resolvedPath}");
 
                             var performed = await result.Perform;
                             yield return performed;
-                            await foreach (var item in DeepCopy(performed.Value.Blocks, pathResolver.ForPath(insertBlock.Reference), lookup))
+                            await foreach (var item in DeepCopy(context, performed.Value.Blocks, pathResolver.ForPath(insertBlock.Reference), lookup))
                                 yield return item;
 
                             break;
@@ -168,14 +181,14 @@ namespace Nota.Site.Generator.Stages
 
                     case SoureReferenceBlock soureReferenceBlock:
                         {
-                            await foreach (var item in DeepCopy(soureReferenceBlock.Blocks, pathResolver, lookup))
+                            await foreach (var item in DeepCopy(context, soureReferenceBlock.Blocks, pathResolver, lookup))
                                 yield return item;
                             break;
                         }
 
                     case SideNote b:
                         {
-                            await foreach (var item in DeepCopy(b.Blocks, pathResolver, lookup))
+                            await foreach (var item in DeepCopy(context, b.Blocks, pathResolver, lookup))
                                 yield return item;
                             break;
                         }
