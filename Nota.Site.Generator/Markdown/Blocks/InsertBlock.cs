@@ -30,7 +30,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
                 var line = markdown[startLine];
                 var nonspace = line.IndexOfNonWhiteSpace();
-                if (nonspace == -1 || nonspace + 2 >= line.Length || line[nonspace] != '~' || line[nonspace] != '[')
+                if (nonspace == -1 || nonspace + 2 >= line.Length || line[nonspace] != '~' || line[nonspace + 1] != '[')
                     return null;
 
                 line = line.Slice(nonspace + 1);
@@ -40,12 +40,16 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 if (findClosing == -1)
                     return null;
 
-                var reference = line.Slice(1, findClosing);
+                var reference = line.Slice(1, findClosing - 1);
+
+                var rest = line.Slice(findClosing + 1);
+                if (!rest.IsWhiteSpace())
+                    return null;
 
                 return BlockParseResult.Create(new InsertBlock(reference.ToString()), startLine, 1);
             }
         }
-        
+
         protected override string StringRepresentation()
         {
             return $"~[{this.Reference}]";
@@ -136,9 +140,13 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     {
                         var id = this.resolver[insertBlock.Reference];
                         if (id == null || !this.lookup.TryGetValue(id, out var referencedDocument))
-                            throw this.Context.Exception($"Could not find referenced document {insertBlock.Reference}");
-
-                        return new SoureReferenceBlock(this.DeepCopy(referencedDocument.Value.Blocks), referencedDocument);
+                        {
+                            return new ParagraphBlock() { Inlines = new[] { new TextRunInline() { Text = $"~[{insertBlock.Reference}] Reference was not found" } } };
+                        }
+                        else
+                        {
+                            return new SoureReferenceBlock(this.DeepCopy(referencedDocument.Value.Blocks), referencedDocument);
+                        }
                     }
 
                 case SoureReferenceBlock soureReferenceBlock:
