@@ -27,7 +27,7 @@ namespace Nota.Site.Generator
         private static IWebHost? host;
 
 
-        private static readonly string[] MarkdownExtensions = { ".md", ".xlsx" };
+        private static readonly string[] MarkdownExtensions = { ".md", ".xlsx", ".xslt" };
 
         private static bool IsMarkdown(IDocument document)
         {
@@ -171,6 +171,10 @@ namespace Nota.Site.Generator
                         return startData;
                     }, "Select Content Files from Ref");
 
+                var dataFile = contentFiles
+                    .Where(x => x.Id == "data/nota.xml")
+                    .SingleEntry();
+
 
                 var siteData = contentFiles
                     .Where(x => x.Id.EndsWith("/.bookdata"), "only bookdata")
@@ -265,11 +269,17 @@ namespace Nota.Site.Generator
                     var insertedMarkdown = input
                         .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                         .Select(data =>
-                        data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
-                            .Then(x => x
-                            .ExcelToMarkdownText()
-                            .TextToStream()
-                        ).Else(x => x))
+                            data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                                .Then(x => x
+                                .ExcelToMarkdownText()
+                                .TextToStream()
+                        ).Else(z => z.If(x => System.IO.Path.GetExtension(x.Id) == ".xslt")
+                                .Then(x => x
+                                .Xslt(dataFile)
+                                .TextToStream()
+                        ).Else(x => x)
+
+                        ))
                         .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content")
                             .YamlMarkdownToDocumentMetadata()
                                         .For<OrderMarkdownMetadata>()
