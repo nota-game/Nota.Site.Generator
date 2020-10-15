@@ -116,7 +116,7 @@ namespace Nota.Site.Generator
                     .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
                     .GitClone("Git for Content")
                     .Where(x => x.Id == "master") // for debuging 
-                                                //.Where(x => true) // for debuging 
+                                                  //.Where(x => true) // for debuging 
                     ;
 
                 var schemaRepo = configFile
@@ -299,7 +299,7 @@ namespace Nota.Site.Generator
                     .Merge(insertedDocuments, (doc, m) => doc.With(doc.Metadata.Add(new AllDocumentsThatAreDependedOn() { DependsOn = m.Value })))
                     .Where(x => !x.Metadata.GetValue<AllDocumentsThatAreDependedOn>().DependsOn.Contains(x.Id))
                     .Transform(x => x.With(x.Metadata.Remove<AllDocumentsThatAreDependedOn>())) // we remove it so it will late not show changes in documents that do not have changes
-                        .Stich("stich")
+                        .Stich(2, "stich")
                         ;
                     var nonMarkdown = input
                         .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
@@ -468,100 +468,136 @@ namespace Nota.Site.Generator
 
         private static TableOfContents GenerateContentsTable(ImmutableList<IDocument<MarkdownDocument>> documents)
         {
-            var chapters = documents.Select(chapterDocument =>
+            //var chapters = documents.Select(chapterDocument =>
+            TableOfContentsEntry? entry = null;
+
+            //entry.Page = chapterDocument.Id;
+            //entry.Id = string.Empty;
+            //entry.Level = 0;
+
+            var stack = new Stack<(MarkdownBlock block, string page)>();
+
+            foreach (var chapterDocument in documents.Reverse())
+                PushBlocks(chapterDocument.Value.Blocks, chapterDocument.Id);
+
+            void PushBlocks(IEnumerable<MarkdownBlock> blocks, string page)
             {
-                TableOfContentsEntry? entry = null;
+                foreach (var item in blocks.Reverse())
+                    stack.Push((item, page));
+            }
 
-                //entry.Page = chapterDocument.Id;
-                //entry.Id = string.Empty;
-                //entry.Level = 0;
+            var chapterList = new Stack<TableOfContentsEntry>();
 
-                var stack = new Stack<MarkdownBlock>();
+            entry = new TableOfContentsEntry
+            {
+                Page = documents.First().Id,
+                Id = string.Empty,
+                Level = 0
+            };
+            chapterList.Push(entry);
 
-                PushBlocks(chapterDocument.Value.Blocks);
-
-                void PushBlocks(IEnumerable<MarkdownBlock> blocks)
+            while (stack.TryPop(out var element))
+            {
+                var (currentBlock, documentId) = element;
+                switch (currentBlock)
                 {
-                    foreach (var item in blocks.Reverse())
-                        stack.Push(item);
-                }
+                    case HeaderBlock headerBlock:
 
-                var chapterList = new Stack<TableOfContentsEntry>();
+                        var id = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
 
-                while (stack.TryPop(out var currentBlock))
-                {
-                    switch (currentBlock)
-                    {
-                        case HeaderBlock headerBlock:
+                        var currentChapter = new TableOfContentsEntry()
+                        {
+                            Level = headerBlock.HeaderLevel,
+                            Page = documentId,
+                            Id = id
+                        };
 
-                            var id = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
 
-                            var currentChapter = new TableOfContentsEntry()
+
+                        if (!chapterList.TryPeek(out var lastChapter))
+                            lastChapter = null;
+                        if (lastChapter is null)
+                        {
+                            System.Diagnostics.Debug.Assert(entry is null);
+                            chapterList.Push(currentChapter);
+                            entry = currentChapter;
+                        }
+                        else if (lastChapter.Level < currentChapter.Level)
+                        {
+                            lastChapter.Sections.Add(currentChapter);
+                            chapterList.Push(currentChapter);
+                        }
+                        else
+                        {
+
+                            while (lastChapter.Level >= currentChapter.Level)
                             {
-                                Level = headerBlock.HeaderLevel,
-                                Page = chapterDocument.Id,
-                                Id = id
-                            };
+                                chapterList.Pop();
+                                lastChapter = chapterList.Peek();
+                            }
 
-
-
-                            if (!chapterList.TryPeek(out var lastChapter))
-                                lastChapter = null;
                             if (lastChapter is null)
                             {
-                                System.Diagnostics.Debug.Assert(entry is null);
-                                chapterList.Push(currentChapter);
-                                entry = currentChapter;
+                                throw new InvalidOperationException("Should not happen after stich");
                             }
-                            else if (lastChapter.Level < currentChapter.Level)
+                            else
                             {
                                 lastChapter.Sections.Add(currentChapter);
                                 chapterList.Push(currentChapter);
                             }
-                            else
-                            {
-
-                                while (lastChapter.Level >= currentChapter.Level)
-                                {
-                                    chapterList.Pop();
-                                    lastChapter = chapterList.Peek();
-                                }
-
-                                if (lastChapter is null)
-                                {
-                                    throw new InvalidOperationException("Should not happen after stich");
-                                }
-                                else
-                                {
-                                    lastChapter.Sections.Add(currentChapter);
-                                    chapterList.Push(currentChapter);
-                                }
-                            }
+                        }
 
 
-                            break;
-                        case Markdown.Blocks.SoureReferenceBlock insert:
-                            PushBlocks(insert.Blocks);
-                            break;
-                        default:
-                            break;
-                    }
+                        break;
+                    case Markdown.Blocks.SoureReferenceBlock insert:
+                        PushBlocks(insert.Blocks, documentId);
+                        break;
+                    default:
+                        break;
                 }
-                if (entry is null)
+            }
+            if (entry is null)
+            {
+                entry = new TableOfContentsEntry
                 {
-                    entry = new TableOfContentsEntry
-                    {
-                        Page = chapterDocument.Id,
-                        Id = string.Empty,
-                        Level = 0
-                    };
-                }
-                return entry;
-            }).ToArray();
+                    Page = documents.First().Id,
+                    Id = string.Empty,
+                    Level = 0
+                };
+                chapterList.Push(entry);
+            }
+
+
+            //for (int i = 1; i < chapters.Count; i++)
+            //{
+            //    if (chapters[i].Level > chapters[i - 1].Level)
+            //    {
+            //        int j = i + 1;
+            //        for (; j < chapters.Count; j++)
+            //        {
+            //            if (chapters[i].Level > chapters[j].Level)
+            //            {
+            //                break;
+            //            }
+            //        }
+            //        // we went one index to far
+            //        var numberToCopy = j - i - 1;
+
+            //        for (int k = 0; k < numberToCopy; k++)
+            //        {
+            //            // we do it 
+            //            chapters[i - 1].Sections.Add(chapters[i]);
+            //            chapters.RemoveAt(i);
+            //        }
+
+            //        // we moved th current element to the previous childrean, so we need to lower the index
+            //        i--;
+            //    }
+            //}
 
             return new TableOfContents()
             {
-                Chapters = chapters
+                Chapters = new[] { entry }
             };
         }
 

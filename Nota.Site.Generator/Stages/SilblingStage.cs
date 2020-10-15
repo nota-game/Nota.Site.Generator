@@ -126,6 +126,15 @@ namespace Nota.Site.Generator
 {
     public static partial class StageExtensions
     {
+        /// <summary>
+        /// Add metadata for previous and next page.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TPreviousItemCache"></typeparam>
+        /// <typeparam name="TPreviousCache"></typeparam>
+        /// <param name="input"></param>
+        /// <param name="name"></param>
+        /// <returns></returns>
         public static SilblingStage<T, TPreviousItemCache, TPreviousCache> Silblings<T, TPreviousItemCache, TPreviousCache>(this MultiStageBase<T, TPreviousItemCache, TPreviousCache> input, string? name = null)
             where TPreviousCache : class
             where TPreviousItemCache : class

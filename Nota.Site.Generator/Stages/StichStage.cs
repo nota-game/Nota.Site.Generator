@@ -22,10 +22,12 @@ namespace Nota.Site.Generator
     {
         private const string NoChapterName = "index";
         private readonly MultiStageBase<MarkdownDocument, TItemCache, TCache> input;
+        private readonly int chapterSeperation;
 
-        public StichStage(MultiStageBase<MarkdownDocument, TItemCache, TCache> input, IGeneratorContext context, string? name = null) : base(context, name)
+        public StichStage(MultiStageBase<MarkdownDocument, TItemCache, TCache> input, int chapterSeperation, IGeneratorContext context, string? name = null) : base(context, name)
         {
             this.input = input ?? throw new ArgumentNullException(nameof(input));
+            this.chapterSeperation = chapterSeperation;
         }
 
         protected override async Task<StageResultList<MarkdownDocument, string, StichCache<TCache>>> DoInternal(StichCache<TCache>? cache, OptionToken options)
@@ -414,7 +416,7 @@ namespace Nota.Site.Generator
             }).ToArray();
         }
 
-        private static List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> GetChaptersInPartitions(bool takeFirstWithoutChapter, bool takeLastChapter, IDocument<MarkdownDocument>[] documents)
+        private List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> GetChaptersInPartitions(bool takeFirstWithoutChapter, bool takeLastChapter, IDocument<MarkdownDocument>[] documents)
         {
             var listOfChaptersInPartition = new List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>>();
 
@@ -429,28 +431,38 @@ namespace Nota.Site.Generator
             for (int j = 0; j < documents.Length; j++)
             {
                 var currentDocument = documents[j];
-                foreach (var block in currentDocument.Value.Blocks)
+                ScanBlocks(currentDocument.Value.Blocks);
+                void ScanBlocks(IList<MarkdownBlock> blocks)
                 {
-                    if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel == 1))
-                        currentList.Add((currentDocument, block));
+                    foreach (var block in blocks)
+                    {
+                        if (block is SoureReferenceBlock soureReference)
+                        {
+                            ScanBlocks(soureReference.Blocks);
 
-                    else if (block is HeaderBlock header && header.HeaderLevel == 1
-                        && (j != documents.Length - 1 // the last block is also the first of the nex partition
-                            || takeLastChapter)) // we don't want to have (double) unless its the last partition.
-                    {
-                        currentList = new List<(IDocument<MarkdownDocument>, MarkdownBlock)>();
-                        listOfChaptersInPartition.Add(currentList);
-                        currentList.Add((currentDocument, block));
+                        }
+                        else if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel <= this.chapterSeperation))
+                            currentList.Add((currentDocument, block));
+
+                        else if (block is HeaderBlock header && header.HeaderLevel <= this.chapterSeperation
+                            && (j != documents.Length - 1 // the last block is also the first of the nex partition
+                                || takeLastChapter)) // we don't want to have (double) unless its the last partition.
+                        {
+                            currentList = new List<(IDocument<MarkdownDocument>, MarkdownBlock)>();
+                            listOfChaptersInPartition.Add(currentList);
+                            currentList.Add((currentDocument, block));
+                        }
+                        else if (block is HeaderBlock header__ && header__.HeaderLevel <= this.chapterSeperation
+                            && j == documents.Length - 1)
+                        {
+                            // we wan't to break the for not foreach, but we are alreary in the last for loop.
+                            break; // so this is enough
+                        }
                     }
-                    else if (block is HeaderBlock header__ && header__.HeaderLevel == 1
-                        && j == documents.Length - 1)
-                    {
-                        // we wan't to break the for not foreach, but we are alreary in the last for loop.
-                        break; // so this is enough
-                    }
+
                 }
-
             }
+
 
             return listOfChaptersInPartition;
         }
@@ -458,7 +470,7 @@ namespace Nota.Site.Generator
 
         private bool ContainsChapters(IList<MarkdownBlock> blocks)
         {
-            return blocks.Any(x => x is HeaderBlock header && header.HeaderLevel == 1);
+            return blocks.Any(x => x is HeaderBlock header && header.HeaderLevel <= this.chapterSeperation);
         }
     }
 
@@ -503,11 +515,11 @@ namespace Nota.Site.Generator
 {
     public static partial class StageExtensions
     {
-        public static StichStage<TListItemCache, TListCache> Stich<TListItemCache, TListCache>(this MultiStageBase<MarkdownDocument, TListItemCache, TListCache> input, string? name = null)
+        public static StichStage<TListItemCache, TListCache> Stich<TListItemCache, TListCache>(this MultiStageBase<MarkdownDocument, TListItemCache, TListCache> input, int chapterSeperation, string? name = null)
         where TListItemCache : class
         where TListCache : class
         {
-            return new StichStage<TListItemCache, TListCache>(input, input.Context, name);
+            return new StichStage<TListItemCache, TListCache>(input, chapterSeperation, input.Context, name);
         }
     }
 }
