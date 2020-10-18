@@ -2,6 +2,7 @@
 using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Inlines;
 using Nota.Site.Generator.Markdown.Blocks;
+using Nota.Site.Generator.Stages;
 using Stasistium;
 using Stasistium.Core;
 using Stasistium.Documents;
@@ -14,7 +15,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Nota.Site.Generator
+namespace Nota.Site.Generator.Stages
 {
     public class StichStage<TItemCache, TCache> : Stasistium.Stages.MultiStageBase<MarkdownDocument, string, StichCache<TCache>>
         where TCache : class

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Nota.Site.Generator
@@ -190,6 +191,18 @@ namespace Nota.Site.Generator
         {
             return !(left == right);
         }
+    }
+
+    public class LicencedFiles
+    {
+        public IList<LicenseInfo> LicenseInfos { get; set; }
+    }
+
+    public class LicenseInfo
+    {
+        public string Id { get; set; }
+        public MetadataContainer Metadata { get; set; }
+        public string Hash { get; set; }
     }
 
     public class AllBooksMetadata

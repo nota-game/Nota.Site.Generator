@@ -135,28 +135,12 @@ namespace Nota.Site.Generator
 
 
 
-                var licesnseFIles = contentRepo.SelectMany(input =>
-                    input.GitRefToFiles(name: "Read Files from Git (Licenses)")
-                    .Where(x =>
-                    {
-                        var extension = Path.GetExtension(x.Id);
-                        return extension != ".html"
-                            && extension != ".cshtml"
-                            && extension != ".css"
-                            && extension != ".scss"
-                            && extension != ".js"
-                            && extension != ".md"
-                            ;
-                    })
-                 );
-
-
 
 
 
                 var generatorOptions = new GenerationOptions()
                 {
-                    CompressCache = false,
+                    CompressCache = true,
                     Refresh = true
                 };
 
@@ -375,9 +359,57 @@ namespace Nota.Site.Generator
                 var files = comninedFiles.Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)));
 
 
+                var licesnseFIles = files
+                    .Where(x =>
+                    {
+                        var extension = NotaPath.GetExtension(x.Id);
+                        return extension != ".html"
+                            && extension != ".cshtml"
+                            && extension != ".css"
+                            && extension != ".scss"
+                            && extension != ".js"
+                            && extension != ".meta"
+                            && extension != ".md"
+                            ;
+                    })
+                 //.EmbededXmp()
+                 
+
+                 .Select(x => 
+                 x
+                 .If(z => NotaPath.GetExtension(z.Id) == ".png")
+                 .Then( y=>y.EmbededXmp())
+                 .Else(y=>y)
+                 )
+                    .ListToSingle(z =>
+                    {
+
+                        var metadataFile = new LicencedFiles()
+                        {
+
+                            LicenseInfos = z.Select(x =>
+                            {
+                                using var stream = x.Value;
+                                return new LicenseInfo
+                                {
+                                    Id = x.Id,
+                                    Metadata = x.Metadata,
+                                    Hash = context.GetHashForStream(stream)
+                                };
+                            }).ToArray()
+                        }; ;
+
+                        return context.CreateDocument(metadataFile, context.GetHashForObject(metadataFile), "LicencedFiles");
+                        });
+                ;
+
+
+
+
 
                 var staticFiles = staticFiles2
-                    .Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)))
+                    .Merge(licesnseFIles, (file, value) => file.With(file.Metadata.Add(value.Value)))
+                    .Merge(allBooks, (file, value) => file.With(file.Metadata.Add(value.Value)))
                     .SetVariable(razorProviderStatic)
                     .Select(input => input
                         .If(x => Path.GetExtension(x.Id) == ".cshtml")

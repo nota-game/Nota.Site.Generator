@@ -1,5 +1,6 @@
 ﻿using MetadataExtractor;
 using Stasistium.Documents;
+using Stasistium.Stages;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -7,7 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Stasistium.Stages
+namespace Nota.Site.Generator.Stages
 {
     public static partial class StageExtension
     {
