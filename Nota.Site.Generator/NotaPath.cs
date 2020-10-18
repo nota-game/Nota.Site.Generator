@@ -81,6 +81,36 @@ namespace Nota.Site.Generator
             return new string(array);
         }
 
+        public static string GetIdWithoutExtension(string id)
+        {
+            var lastIndex = id.LastIndexOf('/');
+            lastIndex = id.IndexOf('.', lastIndex + 1);
+            return id.Substring(0, lastIndex);
+        }
+        public static string GetExtension(string id)
+        {
+            var lastIndex = id.LastIndexOf('/');
+            lastIndex = id.IndexOf('.', lastIndex + 1);
+            return id.Substring(lastIndex);
+        }
+
+        public static bool Is(string id, string match)
+        {
+            if (id == match)
+                return true;
+            var name = GetIdWithoutExtension(id);
+            var extension = GetExtension(id);
+            var index = extension.IndexOf('.', 1);
+            if (index > -1)
+            {
+                var v = (name + extension.Substring(index));
+                return v == match;
+
+            }
+            else
+                return name == match;
+        }
+
         #region .NetCoreCode
         // code from source.dot.net changed to use '/' intead of '\'
         // Licensed to the .NET Foundation under one or more agreements.

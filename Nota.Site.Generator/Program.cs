@@ -115,8 +115,8 @@ namespace Nota.Site.Generator
                 var contentRepo = configFile
                     .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
                     .GitClone("Git for Content")
-                    .Where(x => x.Id == "master") // for debuging 
-                                                  //.Where(x => true) // for debuging 
+                    //.Where(x => x.Id == "master") // for debuging 
+                    //.Where(x => true) // for debuging 
                     ;
 
                 var schemaRepo = configFile
@@ -152,56 +152,13 @@ namespace Nota.Site.Generator
 
 
 
+
+
                 var generatorOptions = new GenerationOptions()
                 {
                     CompressCache = false,
                     Refresh = true
                 };
-
-
-                var contentFiles = contentRepo
-                    .SelectMany(input =>
-                    {
-                        var startData = input
-                        .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-                        .GitRefToFiles(name: "Read Files from Git (Content)")
-                            .Sidecar()
-                                .For<BookMetadata>(".metadata")
-                            ;
-                        return startData;
-                    }, "Select Content Files from Ref");
-
-                var dataFile = contentFiles
-                    .Where(x => x.Id == "data/nota.xml")
-                    .SingleEntry();
-
-
-                var siteData = contentFiles
-                    .Where(x => x.Id.EndsWith("/.bookdata"), "only bookdata")
-                    .Select(input2 =>
-                        input2.Markdown(GenerateMarkdownDocument, "siteData markdown")
-                        .YamlMarkdownToDocumentMetadata("sitedata YamlMarkdown")
-                            .For<BookMetadata>()
-                        .Transform(x =>
-                        {
-                            var startIndex = x.Id.IndexOf('/') + 1;
-                            var endIndex = x.Id.IndexOf('/', startIndex);
-                            var key = x.Id[startIndex..endIndex];
-
-                            var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString(), key);
-
-                            return ArgumentBookMetadata(x, location)
-                                .WithId(location);
-                        }))
-                    .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null, "filter book in sitedata without Bookdata")
-                    .ListToSingle(input =>
-                    {
-                        var siteMetadata = new SiteMetadata()
-                        {
-                            Books = input.Select(x => x.Metadata.GetValue<BookMetadata>()).ToArray()
-                        };
-                        return context.CreateDocument(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
-                    }, "make siteData to single element");
 
 
 
@@ -220,17 +177,207 @@ namespace Nota.Site.Generator
                                .TextToStream())
                            .Else(x => x.GetVariable(sassFiles, (y, _) => y))
                        )
-                .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files");
-
+                //.Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
+                ;
 
 
 
                 var razorProviderStatic = staticFiles2
-                    .FileProvider("Content", "Content file Provider")
-                    .Concat(layoutProvider, "Concat Content and layout FileProvider")
-                    .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider STATIC with ViewStart");
+           .FileProvider("Content", "Content file Provider")
+           .Concat(layoutProvider, "Concat Content and layout FileProvider")
+           .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider STATIC with ViewStart");
+
+
+
+
+
+
+
+                var comninedFiles = contentRepo
+                    .SelectMany(input =>
+                    {
+                        var contentFiles = input
+                        .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
+                        .GitRefToFiles(name: "Read Files from Git (Content)")
+                        .Sidecar()
+                            .For<BookMetadata>(".metadata")
+                        //.Select(input2 =>
+                        //    input2
+                        //    .Transform(x =>
+                        //    {
+                        //        var getData = x.Metadata.GetValue<GitMetadata>();
+                        //        var newId = $"{ Ids.GetIdWithoutExtension(x.Id)}.{getData.CalculatedVersion.Name}{Ids.GetExtension(x.Id)}";
+                        //        return x.WithId(newId);
+                        //    }, "Transform ID so it has the version")
+                        //    )
+
+                            ;
+                        //return startData;
+
+
+
+                        // 
+
+
+                        var dataFile = contentFiles
+                            .Where(x => x.Id == "data/nota.xml")
+                            .SingleEntry();
+
+
+                        var siteData = contentFiles
+                            .Where(x => x.Id.EndsWith("/.bookdata"), "only bookdata")
+                            .Select(input2 =>
+                                input2.Markdown(GenerateMarkdownDocument, "siteData markdown")
+                                .YamlMarkdownToDocumentMetadata("sitedata YamlMarkdown")
+                                    .For<BookMetadata>()
+                                .Transform(x =>
+                                {
+                                    var startIndex = x.Id.IndexOf('/') + 1;
+                                    var endIndex = x.Id.IndexOf('/', startIndex);
+                                    var key = x.Id[startIndex..endIndex];
+
+                                    var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString(), key);
+
+                                    return ArgumentBookMetadata(x, location)
+                                        .WithId(location);
+                                }))
+                            .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null, "filter book in sitedata without Bookdata")
+                            .ListToSingle(input =>
+                            {
+                                var siteMetadata = new SiteMetadata()
+                                {
+                                    Books = input.Select(x => x.Metadata.GetValue<BookMetadata>()).ToArray()
+                                };
+                                return context.CreateDocument(siteMetadata, context.GetHashForObject(siteMetadata), "siteMetadata");
+                            }, "make siteData to single element");
+
+
+
+
+
+
+
+
+                        var grouped = contentFiles.Where(x => x.Id.StartsWith("books/")).GroupBy
+                            (x =>
+                            {
+                                var startIndex = x.Id.IndexOf('/') + 1;
+                                var endIndex = x.Id.IndexOf('/', startIndex);
+                                return x.Id[startIndex..endIndex];
+                            }
+
+                        , (inputOriginal, key) =>
+                        {
+                            var input = inputOriginal.Transform(x => x.WithId(x.Id.Substring($"books/{key}/".Length)));
+
+                            var bookData = input.Where(x => x.Id == $".bookdata")
+                                .SingleEntry()
+                                .Markdown(GenerateMarkdownDocument)
+                                .YamlMarkdownToDocumentMetadata()
+                                    .For<BookMetadata>();
+
+                            var insertedMarkdown = input
+                                .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
+                                .Select(data =>
+                                    data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
+                                        .Then(x => x
+                                        .ExcelToMarkdownText()
+                                        .TextToStream()
+                                ).Else(z => z.If(x => System.IO.Path.GetExtension(x.Id) == ".xslt")
+                                        .Then(x => x
+                                        .Xslt(dataFile)
+                                        .TextToStream()
+                                ).Else(x => x)
+
+                                ))
+                                .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content")
+                                    .YamlMarkdownToDocumentMetadata()
+                                                .For<OrderMarkdownMetadata>()
+                                                )
+                                .InsertMarkdown();
+
+                            var insertedDocuments = insertedMarkdown.ListToSingle(x =>
+                            {
+                                var values = x.SelectMany(y => y.Metadata.TryGetValue<DependendUponMetadata>()?.DependsOn ?? Array.Empty<string>()).Distinct().Where(z => z != null).ToArray();
+                                var context = x.First().Context;
+                                return context.CreateDocument(values, context.GetHashForObject(values), "documentIdsThatAreInserted");
+                            })
+                                ;
+
+                            var markdown = insertedMarkdown
+                            // we will remove all docments that are inserted in another.
+                            .Merge(insertedDocuments, (doc, m) => doc.With(doc.Metadata.Add(new AllDocumentsThatAreDependedOn() { DependsOn = m.Value })))
+                            .Where(x => !x.Metadata.GetValue<AllDocumentsThatAreDependedOn>().DependsOn.Contains(x.Id))
+                            .Transform(x => x.With(x.Metadata.Remove<AllDocumentsThatAreDependedOn>())) // we remove it so it will late not show changes in documents that do not have changes
+                                .Stich(2, "stich")
+                                ;
+                            var nonMarkdown = input
+                                .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
+
+                            var chapters = markdown.ListToSingle(x => context.CreateDocument(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
+
+                            var markdownRendered = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
+                                .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                                .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
+                                .FormatXml()
+                                .TextToStream(), "Markdown All")
+                                .Silblings();
+
+
+
+                            var stiched = markdownRendered
+                                .Concat(nonMarkdown)
+                                .Transform(x => x.WithId($"{key}/{x.Id}"))
+                                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
+                                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
+
+
+
+                            var changedDocuments = stiched.Select(y => y.Transform(x =>
+                            {
+                                var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>().CalculatedVersion.ToString());
+                                var bookPath = NotaPath.Combine(prefix, key);
+                                var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
+                                return changedDocument;
+                            }));
+
+                            return changedDocuments;
+                        }, "Group by for files");
+
+                        var files = grouped
+                            .Transform(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
+                            .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
+                            //.Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
+
+                            ;
+
+
+                        return files;
+                    }, "Select Content Files from Ref")
+                    ;
+
+                var allBooks = comninedFiles.ListToSingle(x =>
+
+                {
+                    var bookData = x.SelectMany(y => y.Metadata.GetValue<SiteMetadata>().Books);
+                    var bookArray = bookData.Distinct().ToArray();
+
+                    var books = new AllBooksMetadata()
+                    {
+                        Books = bookArray
+                    };
+                    return context.CreateDocument(
+                        books, context.GetHashForObject(books), "allBooks"
+                        );
+                }
+                       ); ;
+
+                var files = comninedFiles.Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)));
+
+
 
                 var staticFiles = staticFiles2
+                    .Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)))
                     .SetVariable(razorProviderStatic)
                     .Select(input => input
                         .If(x => Path.GetExtension(x.Id) == ".cshtml")
@@ -241,105 +388,6 @@ namespace Nota.Site.Generator
                                     .Transform(doc => doc.WithId(Path.ChangeExtension(doc.Id, ".html")))))
                             .Else(x => x.GetVariable(razorProviderStatic, (y, _) => y)));
 
-
-
-
-
-
-
-
-                var grouped = contentFiles.Where(x => x.Id.StartsWith("books/")).GroupBy
-                    (x =>
-                    {
-                        var startIndex = x.Id.IndexOf('/') + 1;
-                        var endIndex = x.Id.IndexOf('/', startIndex);
-                        return x.Id[startIndex..endIndex];
-                    }
-
-                , (inputOriginal, key) =>
-                {
-                    var input = inputOriginal.Transform(x => x.WithId(x.Id.Substring($"books/{key}/".Length)));
-
-                    var bookData = input.Where(x => x.Id == $".bookdata")
-                        .SingleEntry()
-                        .Markdown(GenerateMarkdownDocument)
-                        .YamlMarkdownToDocumentMetadata()
-                            .For<BookMetadata>();
-
-                    var insertedMarkdown = input
-                        .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
-                        .Select(data =>
-                            data.If(x => System.IO.Path.GetExtension(x.Id) == ".xlsx")
-                                .Then(x => x
-                                .ExcelToMarkdownText()
-                                .TextToStream()
-                        ).Else(z => z.If(x => System.IO.Path.GetExtension(x.Id) == ".xslt")
-                                .Then(x => x
-                                .Xslt(dataFile)
-                                .TextToStream()
-                        ).Else(x => x)
-
-                        ))
-                        .Select(x => x.Markdown(GenerateMarkdownDocument, name: "Markdown Content")
-                            .YamlMarkdownToDocumentMetadata()
-                                        .For<OrderMarkdownMetadata>()
-                                        )
-                        .InsertMarkdown();
-
-                    var insertedDocuments = insertedMarkdown.ListToSingle(x =>
-                    {
-                        var values = x.SelectMany(y => y.Metadata.TryGetValue<DependendUponMetadata>()?.DependsOn ?? Array.Empty<string>()).Distinct().Where(z => z != null).ToArray();
-                        var context = x.First().Context;
-                        return context.CreateDocument(values, context.GetHashForObject(values), "documentIdsThatAreInserted");
-                    })
-                        ;
-
-                    var markdown = insertedMarkdown
-                    // we will remove all docments that are inserted in another.
-                    .Merge(insertedDocuments, (doc, m) => doc.With(doc.Metadata.Add(new AllDocumentsThatAreDependedOn() { DependsOn = m.Value })))
-                    .Where(x => !x.Metadata.GetValue<AllDocumentsThatAreDependedOn>().DependsOn.Contains(x.Id))
-                    .Transform(x => x.With(x.Metadata.Remove<AllDocumentsThatAreDependedOn>())) // we remove it so it will late not show changes in documents that do not have changes
-                        .Stich(2, "stich")
-                        ;
-                    var nonMarkdown = input
-                        .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
-
-                    var chapters = markdown.ListToSingle(x => context.CreateDocument(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
-
-                    var markdownRendered = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
-                        .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
-                        .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
-                        .FormatXml()
-                        .TextToStream(), "Markdown All")
-                        .Silblings();
-
-
-
-                    var stiched = markdownRendered
-                        .Concat(nonMarkdown)
-                        .Transform(x => x.WithId($"{key}/{x.Id}"))
-                        .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
-                        .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
-
-
-
-                    var changedDocuments = stiched.Select(y => y.Transform(x =>
-                    {
-                        var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>().CalculatedVersion.ToString());
-                        var bookPath = NotaPath.Combine(prefix, key);
-                        var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
-                        return changedDocument;
-                    }));
-
-                    return changedDocuments;
-                }, "Group by for files");
-
-
-
-                var files = grouped
-                    .Transform(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
-                    .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
-                    ;
 
 
 
@@ -719,177 +767,4 @@ namespace Nota.Site.Generator
 
     }
 
-    public class ContentVersions
-    {
-        private readonly IEnumerable<BookVersion> enumerable;
-
-        public ContentVersions(IEnumerable<BookVersion> enumerable)
-        {
-            this.enumerable = enumerable.ToArray();
-        }
-
-        public IEnumerable<BookVersion> Versions => this.enumerable;
-    }
-
-
-    public class Config
-    {
-        public string? ContentRepo { get; set; }
-        public string? SchemaRepo { get; set; }
-        public string? Layouts { get; set; }
-        public string? StaticContent { get; set; }
-        public string? Host { get; set; }
-
-        public string? WebsiteRepo { get; set; }
-    }
-
-    internal class GitMetadata
-    {
-        public GitMetadata(GitRefStage value)
-        {
-            this.Name = value.FrindlyName;
-            this.Type = value.Type;
-        }
-
-        public GitMetadata(string name, GitRefType type)
-        {
-            this.Name = name ?? throw new ArgumentNullException(nameof(name));
-            this.Type = type;
-        }
-
-        public string Name { get; }
-        public GitRefType Type { get; }
-
-        public BookVersion CalculatedVersion
-        {
-            get
-            {
-                BookVersion version;
-                if (this.Type == GitRefType.Branch && this.Name == "master")
-                    version = BookVersion.VNext;
-                else if (this.Type == GitRefType.Branch)
-                    version = new BookVersion(true, this.Name);
-                else
-                    version = new BookVersion(false, this.Name);
-                return version;
-            }
-        }
-
-    }
-
-    public enum BookType : byte
-    {
-        Undefined = 0,
-        Rule = 1,
-        Source = 2,
-        Story = 3,
-    }
-
-    public static class BookTypeExtension
-    {
-        public static string ToId(this BookType bookType) => bookType switch
-        {
-            BookType.Undefined => "UNDEFINED",
-            BookType.Rule => "R",
-            BookType.Source => "Q",
-            BookType.Story => "A",
-            _ => "UNKNOWN"
-        };
-    }
-
-    public class BookMetadata
-    {
-        public BookMetadata()
-        {
-
-        }
-        public BookMetadata(string? location = null, string? beginning = null, BookVersion version = default)
-        {
-            this.Location = location;
-            this.Beginning = beginning;
-            this.Version = version;
-        }
-
-        // From file
-        /// <summary>
-        /// The Title of the book
-        /// </summary>
-        public string Title { get; set; }
-        /// <summary>
-        /// The Number of the book.
-        /// </summary>
-        public uint Number { get; set; }
-        /// <summary>
-        /// The Id of the cover
-        /// </summary>
-        public string Cover { get; set; }
-        /// <summary>
-        /// The type of book
-        /// </summary>
-        public BookType BookType { get; set; }
-        /// <summary>
-        /// An optional abbreviation.
-        /// </summary>
-        public string? Abbr { get; set; }
-        /// <summary>
-        /// The Abstract of this book formated as markdown
-        /// </summary>
-        public string Abstract { get; set; }
-
-
-        // Generated
-        public string? Location { get; }
-        public string? Beginning { get; }
-        public BookVersion Version { get; }
-
-
-        public BookMetadata WithLocation(string location) => new BookMetadata(location, this.Beginning, this.Version)
-        {
-            Title = this.Title,
-            Number = this.Number,
-            Cover = this.Cover,
-            BookType = this.BookType,
-            Abbr = this.Abbr,
-            Abstract = this.Abstract,
-        };
-        public BookMetadata WithBeginning(string beginning) => new BookMetadata(this.Location, beginning, this.Version)
-        {
-            Title = this.Title,
-            Number = this.Number,
-            Cover = this.Cover,
-            BookType = this.BookType,
-            Abbr = this.Abbr,
-            Abstract = this.Abstract,
-        };
-        public BookMetadata WithVersion(BookVersion version) => new BookMetadata(this.Location, this.Beginning, version)
-        {
-            Title = this.Title,
-            Number = this.Number,
-            Cover = this.Cover,
-            BookType = this.BookType,
-            Abbr = this.Abbr,
-            Abstract = this.Abstract,
-        };
-    }
-
-    internal class HostMetadata
-    {
-        public string? Host { get; set; }
-    }
-
-    /// <summary>
-    /// Contains the layout that should be used
-    /// </summary>
-    public class PageLayoutMetadata
-    {
-        /// <summary>
-        /// The Layout that should be used.
-        /// </summary>
-        public string? Layout { get; set; }
-    }
-
-    public class SiteMetadata
-    {
-        public IList<BookMetadata> Books { get; set; }
-    }
 }

@@ -21,7 +21,7 @@ namespace Nota.Site.Generator
             this.Name = name ?? throw new ArgumentNullException(nameof(name));
         }
 
-        public static readonly BookVersion VNext = new BookVersion(true, true, "vNext");
+        public static  BookVersion VNext { get; } = new BookVersion(true, true, "vNext");
 
         public bool IsDraft { get; }
         public string Name { get; }

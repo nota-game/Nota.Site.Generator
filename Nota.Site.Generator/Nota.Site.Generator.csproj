@@ -12,24 +12,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MetadataExtractor" Version="2.3.0" />
+    <PackageReference Include="MetadataExtractor" Version="2.4.3" />
     <PackageReference Include="SourceLink.Copy.PdbFiles" Version="2.8.3">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.193" />
-    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.193" />
-    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.193" />
-    <PackageReference Include="Stasistium.Office" Version="0.1.0-alpha.193" />
-    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha.193" />
-    <PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha.193" />
-    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha.193" />
-    <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20104.2" />
+    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.196" />
+    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.196" />
+    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.196" />
+    <PackageReference Include="Stasistium.Office" Version="0.1.0-alpha.196" />
+    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha.196" />
+    <PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha.196" />
+    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha.196" />
+    <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20371.2" />
 
-    <PackageReference Include="System.Linq.Async" Version="4.0.0" />
+    <PackageReference Include="System.Linq.Async" Version="4.1.1" />
     
   <!-- Kerstil -->
-    <PackageReference Include="Westwind.AspnetCore.LiveReload" Version="0.1.12" />
+    <PackageReference Include="Westwind.AspnetCore.LiveReload" Version="0.2.14" />
     <PackageReference Include="XmpCore" Version="6.1.10" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
 
