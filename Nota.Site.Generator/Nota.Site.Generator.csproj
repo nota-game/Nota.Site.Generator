@@ -1,38 +1,39 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
-    <Nullable>enable</Nullable>
-    <LangVersion>8.0</LangVersion>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>netcoreapp3.1</TargetFramework>
+		<Nullable>enable</Nullable>
+		<LangVersion>8.0</LangVersion>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Include="..\.editorconfig" Link=".editorconfig" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="..\.editorconfig" Link=".editorconfig" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="MetadataExtractor" Version="2.4.3" />
-    <PackageReference Include="SourceLink.Copy.PdbFiles" Version="2.8.3">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.196" />
-    <PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.196" />
-    <PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.196" />
-    <PackageReference Include="Stasistium.Office" Version="0.1.0-alpha.196" />
-    <PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha.196" />
-    <PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha.196" />
-    <PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha.196" />
-    <PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20371.2" />
+	<ItemGroup>
+		<PackageReference Include="MetadataExtractor" Version="2.4.3" />
+		<PackageReference Include="HtmlSanitizer" Version="5.0.353" />
+		<PackageReference Include="SourceLink.Copy.PdbFiles" Version="2.8.3">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.Office" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha.198" />
+		<PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20371.2" />
 
-    <PackageReference Include="System.Linq.Async" Version="4.1.1" />
-    
-  <!-- Kerstil -->
-    <PackageReference Include="Westwind.AspnetCore.LiveReload" Version="0.2.14" />
-    <PackageReference Include="XmpCore" Version="6.1.10" />
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+		<PackageReference Include="System.Linq.Async" Version="4.1.1" />
 
-  </ItemGroup>
+		<!-- Kerstil -->
+		<PackageReference Include="Westwind.AspnetCore.LiveReload" Version="0.2.14" />
+		<PackageReference Include="XmpCore" Version="6.1.10" />
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+	</ItemGroup>
 
 </Project>

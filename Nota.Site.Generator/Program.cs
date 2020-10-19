@@ -112,11 +112,12 @@ namespace Nota.Site.Generator
                 }
 
 
+
                 var contentRepo = configFile
                     .Transform(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
                     .GitClone("Git for Content")
                     //.Where(x => x.Id == "master") // for debuging 
-                    //.Where(x => true) // for debuging 
+                    .Where(x => true) // for debuging 
                     ;
 
                 var schemaRepo = configFile
@@ -167,9 +168,9 @@ namespace Nota.Site.Generator
 
 
                 var razorProviderStatic = staticFiles2
-           .FileProvider("Content", "Content file Provider")
-           .Concat(layoutProvider, "Concat Content and layout FileProvider")
-           .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider STATIC with ViewStart");
+                   .FileProvider("Content", "Content file Provider")
+                   .Concat(layoutProvider, "Concat Content and layout FileProvider")
+                   .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider STATIC with ViewStart");
 
 
 
@@ -408,7 +409,7 @@ namespace Nota.Site.Generator
 
 
                 var staticFiles = staticFiles2
-                    .Merge(licesnseFIles, (file, value) => file.With(file.Metadata.Add(value.Value)))
+                    .Merge(licesnseFIles, (file, value) => file.With(file.Metadata.Add(value.Value)),"Merge licenses with static files")
                     .Merge(allBooks, (file, value) => file.With(file.Metadata.Add(value.Value)))
                     .SetVariable(razorProviderStatic)
                     .Select(input => input

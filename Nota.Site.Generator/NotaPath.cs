@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace Nota.Site.Generator
@@ -83,15 +84,16 @@ namespace Nota.Site.Generator
 
         public static string GetIdWithoutExtension(string id)
         {
-            var lastIndex = id.LastIndexOf('/');
-            lastIndex = id.IndexOf('.', lastIndex + 1);
+            //var lastIndex = id.LastIndexOf('/');
+            var lastIndex = id.LastIndexOf('.');
             return id.Substring(0, lastIndex);
         }
         public static string GetExtension(string id)
         {
-            var lastIndex = id.LastIndexOf('/');
-            lastIndex = id.IndexOf('.', lastIndex + 1);
-            return id.Substring(lastIndex);
+            return Path.GetExtension(id);
+            //var lastIndex = id.LastIndexOf('/');
+            //lastIndex = id.IndexOf('.', lastIndex + 1);
+            //return id.Substring(lastIndex);
         }
 
         public static bool Is(string id, string match)
