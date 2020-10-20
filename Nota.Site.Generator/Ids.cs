@@ -34,15 +34,15 @@ namespace Nota.Site.Generator
         public string? WebsiteRepo { get; set; }
     }
 
-    internal class GitMetadata
+    internal class GitRefMetadata
     {
-        public GitMetadata(GitRefStage value)
+        public GitRefMetadata(GitRefStage value)
         {
             this.Name = value.FrindlyName;
             this.Type = value.Type;
         }
 
-        public GitMetadata(string name, GitRefType type)
+        public GitRefMetadata(string name, GitRefType type)
         {
             this.Name = name ?? throw new ArgumentNullException(nameof(name));
             this.Type = type;

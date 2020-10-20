@@ -1,6 +1,7 @@
 ﻿using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Inlines;
 using Stasistium.Stages;
+using System;
 using System.Linq;
 using System.Text;
 
@@ -14,9 +15,46 @@ namespace Nota.Site.Generator
             switch (block)
             {
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
-                    builder.Append($"<div class=\"edit-box\"><a href=\"{sourceReferenceBlock.OriginalDocument.Id}\" >Bearbeiten</a>");
+                    builder.Append($"<div class=\"edit-box\"><span><a href=\"");
+                    builder.Append(sourceReferenceBlock.OriginalDocument.Id);
+                    builder.Append("\" >Bearbeiten</a>");
+                    var commitDetails = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitMetadata>();
+                    if (commitDetails != null)
+                    {
+                        var date = commitDetails.FileCommits.First().Author.Date;
+
+                        builder.Append("<span class=\"timecode\" timecode=\"");
+                        builder.Append(date
+                            .Subtract(new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero))
+                            .TotalMilliseconds);
+                        builder.Append("\" >");
+                        builder.Append(date.ToString());
+                        builder.Append("</span>");
+                    }
+                    builder.Append("</span>");
                     this.Render(builder, sourceReferenceBlock.Blocks);
                     builder.Append("</div>");
+
+                    break;
+
+                case Markdown.Blocks.ChapterHeaderBlock header:
+                    builder.Append("<h");
+                    builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    var id = header.ChapterId ?? GetHeaderText(header);
+                    id = id.Replace(' ', '-');
+                    if (id.Length > 0)
+                    {
+                        builder.Append(" id=\"");
+                        builder.Append(id);
+                        builder.Append("\" ");
+                    }
+                    builder.Append(">");
+
+                    foreach (var item in header.Inlines)
+                        this.Render(builder, item);
+                    builder.Append("</h");
+                    builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    builder.Append(">");
 
                     break;
 

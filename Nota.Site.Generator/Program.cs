@@ -14,6 +14,7 @@ using Westwind.AspNetCore.LiveReload;
 using Blocks = AdaptMark.Parsers.Markdown.Blocks;
 using Inlines = AdaptMark.Parsers.Markdown.Inlines;
 using Nota.Site.Generator.Stages;
+using Nota.Site.Generator.Markdown.Blocks;
 
 namespace Nota.Site.Generator
 {
@@ -182,8 +183,8 @@ namespace Nota.Site.Generator
                     .SelectMany(input =>
                     {
                         var contentFiles = input
-                        .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
-                        .GitRefToFiles(name: "Read Files from Git (Content)")
+                        .Transform(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
+                        .GitRefToFiles(addGitMetadata: true, name: "Read Files from Git (Content)")
                         .Sidecar()
                             .For<BookMetadata>(".metadata")
                         //.Select(input2 =>
@@ -221,7 +222,7 @@ namespace Nota.Site.Generator
                                     var endIndex = x.Id.IndexOf('/', startIndex);
                                     var key = x.Id[startIndex..endIndex];
 
-                                    var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>()!.CalculatedVersion.ToString(), key);
+                                    var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), key);
 
                                     return ArgumentBookMetadata(x, location)
                                         .WithId(location);
@@ -320,7 +321,7 @@ namespace Nota.Site.Generator
 
                             var changedDocuments = stiched.Select(y => y.Transform(x =>
                             {
-                                var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitMetadata>().CalculatedVersion.ToString());
+                                var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
                                 var bookPath = NotaPath.Combine(prefix, key);
                                 var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
                                 return changedDocument;
@@ -374,13 +375,13 @@ namespace Nota.Site.Generator
                             ;
                     })
                  //.EmbededXmp()
-                 
 
-                 .Select(x => 
+
+                 .Select(x =>
                  x
                  .If(z => NotaPath.GetExtension(z.Id) == ".png")
-                 .Then( y=>y.EmbededXmp())
-                 .Else(y=>y)
+                 .Then(y => y.EmbededXmp())
+                 .Else(y => y)
                  )
                     .ListToSingle(z =>
                     {
@@ -401,7 +402,7 @@ namespace Nota.Site.Generator
                         }; ;
 
                         return context.CreateDocument(metadataFile, context.GetHashForObject(metadataFile), "LicencedFiles");
-                        });
+                    });
                 ;
 
 
@@ -409,7 +410,7 @@ namespace Nota.Site.Generator
 
 
                 var staticFiles = staticFiles2
-                    .Merge(licesnseFIles, (file, value) => file.With(file.Metadata.Add(value.Value)),"Merge licenses with static files")
+                    .Merge(licesnseFIles, (file, value) => file.With(file.Metadata.Add(value.Value)), "Merge licenses with static files")
                     .Merge(allBooks, (file, value) => file.With(file.Metadata.Add(value.Value)))
                     .SetVariable(razorProviderStatic)
                     .Select(input => input
@@ -443,14 +444,14 @@ namespace Nota.Site.Generator
                 var schemaFiles = schemaRepo
                     .SelectMany(input =>
                      input
-                     .Transform(x => x.With(x.Metadata.Add(new GitMetadata(x.Value.FrindlyName, x.Value.Type))))
+                     .Transform(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))))
                      .GitRefToFiles()
                      .Where(x => System.IO.Path.GetExtension(x.Id) != ".md")
                      .Select(x =>
                         x.ToText()
                         .Transform(y =>
                         {
-                            var gitData = y.Metadata.GetValue<GitMetadata>()!;
+                            var gitData = y.Metadata.GetValue<GitRefMetadata>()!;
                             var version = gitData.CalculatedVersion;
                             var host = y.Metadata.GetValue<HostMetadata>()!.Host;
                             var newText = hostReplacementRegex.Replace(y.Value, @$"{host}/schema/{version}/");
@@ -460,7 +461,7 @@ namespace Nota.Site.Generator
                      )
                      .Transform(x =>
                      {
-                         var gitData = x.Metadata.GetValue<GitMetadata>()!;
+                         var gitData = x.Metadata.GetValue<GitRefMetadata>()!;
                          var version = gitData.CalculatedVersion;
 
                          return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
@@ -540,7 +541,7 @@ namespace Nota.Site.Generator
                 return x;
             newMetadata = newMetadata.WithLocation(location);
 
-            var gitdata = x.Metadata.TryGetValue<GitMetadata>();
+            var gitdata = x.Metadata.TryGetValue<GitRefMetadata>();
             if (gitdata != null)
                 newMetadata = newMetadata.WithVersion(gitdata.CalculatedVersion);
 
@@ -573,6 +574,7 @@ namespace Nota.Site.Generator
             {
                 Page = documents.First().Id,
                 Id = string.Empty,
+                Title = string.Empty,
                 Level = 0
             };
             chapterList.Push(entry);
@@ -584,13 +586,21 @@ namespace Nota.Site.Generator
                 {
                     case HeaderBlock headerBlock:
 
-                        var id = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
+                        string id;
+                        var title = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
+                        if (headerBlock is ChapterHeaderBlock ch && ch.ChapterId != null)
+                            id = ch.ChapterId;
+                        else
+                            id = title;
+
+
 
                         var currentChapter = new TableOfContentsEntry()
                         {
                             Level = headerBlock.HeaderLevel,
                             Page = documentId,
-                            Id = id
+                            Id = id,
+                            Title = title
                         };
 
 

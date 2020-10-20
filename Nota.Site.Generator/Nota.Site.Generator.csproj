@@ -13,18 +13,18 @@
 
 	<ItemGroup>
 		<PackageReference Include="MetadataExtractor" Version="2.4.3" />
-		<PackageReference Include="HtmlSanitizer" Version="5.0.353" />
+		<PackageReference Include="HtmlSanitizer" Version="5.0.355" />
 		<PackageReference Include="SourceLink.Copy.PdbFiles" Version="2.8.3">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.198" />
-		<PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.198" />
-		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.198" />
-		<PackageReference Include="Stasistium.Office" Version="0.1.0-alpha.198" />
-		<PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha.198" />
-		<PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha.198" />
-		<PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha.198" />
+		<PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.200" />
+		<PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.200" />
+		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.200" />
+		<PackageReference Include="Stasistium.Office" Version="0.1.0-alpha.200" />
+		<PackageReference Include="Stasistium.Razor" Version="0.1.0-alpha.200" />
+		<PackageReference Include="Stasistium.Sass" Version="0.1.0-alpha.200" />
+		<PackageReference Include="Stasistium.YAML" Version="0.1.0-alpha.200" />
 		<PackageReference Include="System.CommandLine.DragonFruit" Version="0.3.0-alpha.20371.2" />
 
 		<PackageReference Include="System.Linq.Async" Version="4.1.1" />

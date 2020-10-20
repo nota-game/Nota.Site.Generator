@@ -1,6 +1,7 @@
 ﻿using AdaptMark.Parsers.Markdown;
 using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Inlines;
+using AngleSharp.Text;
 using Nota.Site.Generator.Markdown.Blocks;
 using Nota.Site.Generator.Stages;
 using Stasistium;
@@ -11,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -114,6 +116,7 @@ namespace Nota.Site.Generator.Stages
                         orderedList.Add(stateLookup.First().Key);
                     }
 
+                    await this.UpdateHeadersWithContaining(orderedList, stateLookup);
 
                     // partition the list with chepters
 
@@ -153,7 +156,7 @@ namespace Nota.Site.Generator.Stages
 
                         var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
 
-                        var listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
+                        var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
 
                         var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
                         var partitition = new Partition
@@ -253,6 +256,13 @@ namespace Nota.Site.Generator.Stages
 
                     var chapterPartitions = new List<List<string>>();
 
+                    //TODO: find a way to only resolve the change documents
+                    // I need propably to cache the last header, its level and the parent header
+                    // of each document. In additon the replacement of Header with ChapterHader 
+                    // needs to be performed lazy when a document is requested later.
+                    // This looks like so much trouble...
+                    await this.UpdateHeadersWithContaining(orderedList, stateLookup);
+
 
                     List<string>? currentChapterIds = null;
 
@@ -290,7 +300,7 @@ namespace Nota.Site.Generator.Stages
                         {
                             var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
 
-                            var listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
+                            var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
 
                             var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
 
@@ -316,7 +326,7 @@ namespace Nota.Site.Generator.Stages
                             {
                                 var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
 
-                                var listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
+                                var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
                                 var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
 
                                 return documentsInPartition;
@@ -384,6 +394,56 @@ namespace Nota.Site.Generator.Stages
             return this.Context.CreateStageResultList(actualTask, hasChanges, ids, cache, cache.Hash, result.Cache);
         }
 
+        private async Task UpdateHeadersWithContaining(List<string> orderedList, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> stateLookup)
+        {
+            var headerStack = new Stack<HeaderBlock>();
+            foreach (var item in orderedList.Select(async x => (await stateLookup[x].Perform).Value))
+            {
+                var doc = await item;
+                var blocks = doc.Blocks;
+                ScanAndReplace(blocks);
+                void ScanAndReplace(IList<MarkdownBlock> blocks)
+                {
+
+                    for (var i = 0; i < blocks.Count; i++)
+                    {
+                        var block = blocks[i];
+                        if (block is ChapterHeaderBlock ch && !string.IsNullOrWhiteSpace(ch.ChapterId))
+                        {
+                            while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= ch.HeaderLevel)
+                                headerStack.Pop();
+                            headerStack.Push(ch);
+                        }
+                        else if (block is HeaderBlock bl)
+                        {
+                            while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= bl.HeaderLevel)
+                                headerStack.Pop();
+                            headerStack.Push(bl);
+
+                            var id = string.Join("→", headerStack.Select(x => MarkdownInline.ToString(x.Inlines)).Reverse());
+                            id = id.Replace(' ', '-');
+                            if (bl is ChapterHeaderBlock ch2)
+                                ch2.ChapterId = id;
+                            else
+                            {
+                                var newChapter = new ChapterHeaderBlock()
+                                {
+                                    HeaderLevel = bl.HeaderLevel,
+                                    Inlines = bl.Inlines,
+                                    ChapterId = id
+                                };
+                                blocks[i] = newChapter;
+                            }
+                        }
+                        else if (block is SoureReferenceBlock sr)
+                        {
+                            ScanAndReplace(sr.Blocks);
+                        }
+                    }
+                }
+            }
+        }
+
         private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IDocument<MarkdownDocument>[] documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
         {
             return listOfChaptersInPartition.Select(x =>
@@ -408,10 +468,12 @@ namespace Nota.Site.Generator.Stages
                 string chapterName;
                 if (firstBlock is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
                     chapterName = chapterheaderBlock.ChapterId;
-                if (firstBlock is HeaderBlock headerBlock)
+                else if (firstBlock is HeaderBlock headerBlock)
                     chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
                 else
                     chapterName = StichStage<TItemCache, TCache>.NoChapterName;
+
+                chapterName = System.IO.Path.GetInvalidFileNameChars().Aggregate(chapterName, (filename, invalidChar) => filename.Replace(invalidChar.ToString(), invalidChar.ToHex()), x => x);
 
                 return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
             }).ToArray();
