@@ -91,9 +91,36 @@ namespace Nota.Site.Generator
         public static string GetExtension(string id)
         {
             return Path.GetExtension(id);
-            //var lastIndex = id.LastIndexOf('/');
-            //lastIndex = id.IndexOf('.', lastIndex + 1);
-            //return id.Substring(lastIndex);
+        }
+        
+        public static string GetFolder(string id)
+        {
+            var prefixIndex = id.LastIndexOf('/');
+            if (prefixIndex == -1)
+return string.Empty;
+return id[0..prefixIndex];
+        }
+
+        public static string ChangeName(string id, string newNameWithoutExtension)
+        {
+            var prefixIndex = id.LastIndexOf('/');
+            string prefix;
+            if (prefixIndex != -1)
+                prefix = id.Substring(0, prefixIndex+1);
+            else
+                prefix = string.Empty;
+
+            var extension = GetExtension(id);
+
+            return prefix + newNameWithoutExtension + extension;
+        }
+
+
+        public static string ChangeExtension(string id, string newExtension)
+        {
+            if (!newExtension.StartsWith('.'))
+                newExtension = "." + newExtension;
+            return GetIdWithoutExtension(id) + newExtension;
         }
 
         public static bool Is(string id, string match)

@@ -15,6 +15,7 @@ using Blocks = AdaptMark.Parsers.Markdown.Blocks;
 using Inlines = AdaptMark.Parsers.Markdown.Inlines;
 using Nota.Site.Generator.Stages;
 using Nota.Site.Generator.Markdown.Blocks;
+using System.Text;
 
 namespace Nota.Site.Generator
 {
@@ -33,6 +34,16 @@ namespace Nota.Site.Generator
         private static bool IsMarkdown(IDocument document)
         {
             return MarkdownExtensions.Any(x => Path.GetExtension(document.Id) == x);
+        }
+
+        private static bool IsHtml(IDocument document)
+        {
+            return Path.GetExtension(document.Id) == ".html";
+        }
+
+        private static bool IsMeta(IDocument document)
+        {
+            return Path.GetExtension(document.Id) == ".meta";
         }
 
         /// <summary>
@@ -302,9 +313,54 @@ namespace Nota.Site.Generator
 
                             var chapters = markdown.ListToSingle(x => context.CreateDocument(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
 
-                            var markdownRendered = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
-                                .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                            var preparedForRender = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)))
                                 .Transform(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
+                                .Select(x => x.GetReferenceLocations())
+                                .Transform(x =>
+                                {
+
+
+                                    var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                                    var newReferences = x.Metadata.GetValue<ImageReferences>().References
+                                        .Select(y =>
+                                        {
+                                            return new ImageReference()
+                                            {
+                                                ReferencedId = NotaPath.Combine(prefix, key, y.ReferencedId),
+                                                Document = NotaPath.Combine(prefix, key, y.Document),
+                                                Header = y.Header
+                                            };
+
+                                        })
+                                        .OrderBy(x => x.Document).ThenBy(x => x.Header).ThenBy(x => x.ReferencedId);
+
+
+                                    var images = new ImageReferences()
+                                    {
+                                        References = newReferences.ToArray()
+                                    };
+
+                                    return x.With(x.Metadata.AddOrUpdate(images));
+                                })
+                                ;
+
+
+                            //preparedForRender.Merge(preparedForRender.GetReferenceLocations("references"), (stage, file) =>
+                            //{
+
+                            //});
+
+                            //var referencesImages = preparedForRender.GetReferenceLocations("references")
+                            //.Transform(x=> {
+                            //    x.Value.References.Select(y => new ImageReference() { Header = y.Header,
+                            //     ReferencedId = $"{key}/{y.ReferencedId}",
+                            //      Document = $"{key}/{y.Document}"
+                            //    } );
+                            //})
+                            ;
+
+                            var markdownRendered = preparedForRender
+                                .Select(x => x.MarkdownToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
                                 .FormatXml()
                                 .TextToStream(), "Markdown All")
                                 .Silblings();
@@ -358,7 +414,181 @@ namespace Nota.Site.Generator
                 }
                        ); ;
 
-                var files = comninedFiles.Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)));
+                var imageData = comninedFiles.Where(x => x.Metadata.TryGetValue<ImageReferences>() != null)
+              .ListToSingle(documents =>
+              {
+                  var newReferences = documents.SelectMany(x =>
+                  {
+                      var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                      return x.Metadata.GetValue<ImageReferences>().References
+                          //.Select(y =>
+                          //{
+                          //    return new ImageReference()
+                          //    {
+                          //        ReferencedId = NotaPath.Combine(prefix, y.ReferencedId),
+                          //        Document = NotaPath.Combine(prefix, y.Document),
+                          //        Header = y.Header
+                          //    };
+
+                          //})
+                          ;
+                  })
+                  .OrderBy(x => x.Document).ThenBy(x => x.Header).ThenBy(x => x.ReferencedId);
+
+
+                  var images = new ImageReferences()
+                  {
+                      References = newReferences.ToArray()
+                  };
+
+                  return context.CreateDocument(images, context.GetHashForObject(images), "Images");
+              })
+              ;
+
+
+                var removedDoubles = comninedFiles.Where(x => !IsHtml(x) && !IsMarkdown(x) && !IsMeta(x))
+                     .Merge(imageData, (file, image) =>
+                     {
+                         var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
+                         if (references.Any())
+                         {
+                             var newData = new ImageReferences()
+                             {
+                                 References = references.ToArray()
+                             };
+                             return file.With(file.Metadata.Add(newData));
+                         }
+                         else return file;
+                     })
+                    .GroupBy(
+                    x =>
+                    {
+                        using (var stream = x.Value)
+                            return context.GetHashForStream(stream);
+                    },
+                    (input, key) =>
+                    {
+                        var erg = input.ListToSingle(x =>
+                        {
+                            if (!x.Skip(1).Any())
+                                return x.First();
+
+                            var doc = x.First();
+                            doc = doc.WithId(key + NotaPath.GetExtension(doc.Id));
+                            foreach (var item in x.Skip(1))
+                            {
+                                var metadata = item.Metadata.TryGetValue<ImageReferences>();
+                                if (metadata is null)
+                                {
+                                    metadata = new ImageReferences()
+                                    {
+                                        References = new[] {new ImageReference() {
+                                            ReferencedId = item.Id
+                                        } }
+                                    };
+                                }
+                                doc = doc.With(doc.Metadata.AddOrUpdate(metadata, (oldvalue, newvalue) => new ImageReferences()
+                                {
+                                    References = oldvalue.References.Concat(newvalue.References).ToArray()
+                                }));
+                            }
+
+                            // doc.Metadata.GetValue<ImageReferences>().References.Select(y=>
+                            // {
+                            //     var targetPath = y.ReferencedId;
+                            //     relativeTo = y.Document;
+                            //     return y;
+                            // });
+
+                            return doc;
+
+                        });
+
+                        return erg.ToList();
+                    })
+                    ;
+
+                var combinedFiles = comninedFiles.Merge(removedDoubles.ListToSingle(x =>
+                {
+                    //var l = x.Select(y => y).ToArray();
+                    return context.CreateDocument(x, context.GetHashForObject(x), "list-of-doubles");
+                }), (input, removed) =>
+                {
+                    var removedDocuments = removed.Value.Select(y => y.Metadata.TryGetValue<ImageReferences>()).Where(x => x != null).SelectMany(x => x.References).Select(x => x.ReferencedId);
+                    if (removedDocuments.Contains(input.Id))
+                        return input.WithId($"TO_REMOVE{input.Id}");
+
+                    if (Path.GetExtension(input.Id) == ".html")
+                    {
+                        using var stream = input.Value;
+                        using var reader = new StreamReader(stream);
+                        string text = reader.ReadToEnd();
+                        var originalText = text;
+                        foreach (var removedDocument in removed.Value)
+                        {
+                            var metadata = removedDocument.Metadata.TryGetValue<ImageReferences>();
+                            if (metadata is null)
+                                continue;
+                            foreach (var item in metadata.References)
+                            {
+                                ReadOnlySpan<char> relativeTo = NotaPath.GetFolder(input.Id).AsSpan();
+                                ReadOnlySpan<char> absolute = item.ReferencedId.AsSpan();
+
+var clipedRelative= GetFirstPart(relativeTo, out var relativeToRest);
+var clipedAbsolute =  GetFirstPart( absolute, out var absolutRest);
+
+while( MemoryExtensions.Equals(clipedAbsolute , clipedRelative, StringComparison.Ordinal)){
+relativeTo = relativeToRest;
+absolute = absolutRest;
+ clipedRelative= GetFirstPart(relativeTo, out relativeToRest);
+ clipedAbsolute =  GetFirstPart( absolute, out  absolutRest);
+
+}
+
+while(!GetFirstPart(relativeTo, out relativeToRest).IsEmpty){
+    relativeTo = relativeToRest;
+    absolute = ("../"+ absolute.ToString()).AsSpan();
+}
+
+
+
+ReadOnlySpan<char>  GetFirstPart(ReadOnlySpan<char> t, out ReadOnlySpan<char> rest){
+var index= t.IndexOf('/');
+if(index == -1)
+    { 
+     rest =  string.Empty;
+        return t;
+    }
+else{
+    rest = t[(index+1)..^0];
+    return t[0..index];
+    }
+}
+
+                                
+
+
+
+                                text = text.Replace(absolute.ToString(), "/"+removedDocument.Id);
+                                text = text.Replace(item.ReferencedId, "/"+removedDocument.Id);
+                            }
+                        }
+                        if (originalText != text)
+                        {
+                            var data = Encoding.UTF8.GetBytes(text);
+                            return input.With(() => new MemoryStream(data), context.GetHashForString(text));
+                        }
+                    }
+
+                    return input;
+                }).Where(x => !x.Id.StartsWith("TO_REMOVE"))
+                  .Concat(removedDoubles);
+
+
+
+                var files = combinedFiles.Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)));
+
+
 
 
                 var licesnseFIles = files
@@ -374,6 +604,20 @@ namespace Nota.Site.Generator
                             && extension != ".md"
                             ;
                     })
+                 //.Merge(imageData, (file, image) =>
+                 //{
+                 //    var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
+                 //    if (references.Any())
+                 //    {
+                 //        var newData = new ImageReferences()
+                 //        {
+                 //            References = references.ToArray()
+                 //        };
+                 //        return file.With(file.Metadata.Add(newData));
+                 //    }
+                 //    else return file;
+                 //})
+
                  //.EmbededXmp()
 
 

@@ -1,4 +1,5 @@
-﻿using AdaptMark.Parsers.Markdown;
+﻿using AdaptMark.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown;
 using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Helpers;
 using System;
@@ -11,7 +12,7 @@ using System.Text.RegularExpressions;
 namespace Nota.Site.Generator.Markdown.Blocks
 {
 
-    public class SideNote : MarkdownBlock
+    public class SideNote : MarkdownBlock, IBlockContainer
     {
         public SideNote(string id, SideNoteType sideNoteType, IEnumerable<(string id, byte distribution)> distributions, IEnumerable<MarkdownBlock> blocks)
         {
@@ -30,6 +31,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         public ImmutableArray<(string id, byte distribution)> Distributions { get; }
         public ImmutableArray<MarkdownBlock> Blocks { get; }
+        IReadOnlyList<MarkdownBlock> IBlockContainer.Blocks => this.Blocks.AsReadonly();
 
         public new class Parser : Parser<SideNote>
         {

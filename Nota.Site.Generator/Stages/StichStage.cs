@@ -420,8 +420,7 @@ namespace Nota.Site.Generator.Stages
                                 headerStack.Pop();
                             headerStack.Push(bl);
 
-                            var id = string.Join("→", headerStack.Select(x => MarkdownInline.ToString(x.Inlines)).Reverse());
-                            id = id.Replace(' ', '-');
+                            var id = GenerateHeaderString(headerStack);
                             if (bl is ChapterHeaderBlock ch2)
                                 ch2.ChapterId = id;
                             else
@@ -442,6 +441,13 @@ namespace Nota.Site.Generator.Stages
                     }
                 }
             }
+        }
+
+        public static string GenerateHeaderString(Stack<HeaderBlock> headerStack)
+        {
+            var id = string.Join("→", headerStack.Select(x => MarkdownInline.ToString(x.Inlines)).Reverse());
+            id = id.Replace(' ', '-');
+            return id;
         }
 
         private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IDocument<MarkdownDocument>[] documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
