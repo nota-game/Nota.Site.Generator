@@ -41,7 +41,17 @@ namespace Nota.Site.Generator.Stages
 
             using (var stream = input.Value)
             {
-                var readed = ImageMetadataReader.ReadMetadata(stream).OfType<MetadataExtractor.Formats.Xmp.XmpDirectory>().FirstOrDefault();
+                MetadataExtractor.Formats.Xmp.XmpDirectory? readed;
+
+                try
+                {
+                    readed = ImageMetadataReader.ReadMetadata(stream).OfType<MetadataExtractor.Formats.Xmp.XmpDirectory>().FirstOrDefault();
+                }
+                catch (MetadataExtractor.ImageProcessingException)
+                {
+                    readed = null;
+                }
+
                 if (readed?.XmpMeta is null)
                     return input;
 

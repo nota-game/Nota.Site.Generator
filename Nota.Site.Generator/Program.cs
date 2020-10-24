@@ -16,6 +16,12 @@ using Inlines = AdaptMark.Parsers.Markdown.Inlines;
 using Nota.Site.Generator.Stages;
 using Nota.Site.Generator.Markdown.Blocks;
 using System.Text;
+using AngleSharp;
+using AngleSharp.Html.Parser;
+using AngleSharp.Dom;
+
+using IDocument = Stasistium.Documents.IDocument;
+
 
 namespace Nota.Site.Generator
 {
@@ -24,26 +30,58 @@ namespace Nota.Site.Generator
     {
         public string[] DependsOn { get; set; }
     }
-    class Program
+    public static class Nota
     {
         private static IWebHost? host;
 
+        private static readonly Ganss.XSS.HtmlSanitizer sanitizer = new Ganss.XSS.HtmlSanitizer();
 
         private static readonly string[] MarkdownExtensions = { ".md", ".xlsx", ".xslt" };
+        private static readonly string[] ImageExtensions = { ".png", ".jpeg", ".jpg", ".gif" };
 
-        private static bool IsMarkdown(IDocument document)
+        public static string Sanitize(string html)
         {
-            return MarkdownExtensions.Any(x => Path.GetExtension(document.Id) == x);
+            return sanitizer.Sanitize(html);
         }
 
-        private static bool IsHtml(IDocument document)
+        public static bool IsMarkdown(string document)
         {
-            return Path.GetExtension(document.Id) == ".html";
+            return MarkdownExtensions.Any(x => Path.GetExtension(document) == x);
         }
 
-        private static bool IsMeta(IDocument document)
+        public static bool IsMarkdown(IDocument document)
         {
-            return Path.GetExtension(document.Id) == ".meta";
+            return IsMarkdown(document.Id);
+        }
+
+        public static bool IsHtml(string document)
+        {
+            return Path.GetExtension(document) == ".html";
+        }
+
+        public static bool IsHtml(IDocument document)
+        {
+            return IsHtml(document.Id);
+        }
+
+        public static bool IsImage(string document)
+        {
+            return ImageExtensions.Any(x => Path.GetExtension(document) == x);
+        }
+
+        public static bool IsImage(IDocument document)
+        {
+            return IsImage(document.Id);
+        }
+
+        public static bool IsMeta(string document)
+        {
+            return Path.GetExtension(document) == ".meta";
+        }
+
+        public static bool IsMeta(IDocument document)
+        {
+            return IsMeta(document.Id);
         }
 
         /// <summary>
@@ -51,7 +89,7 @@ namespace Nota.Site.Generator
         /// </summary>
         /// <param name="configuration">Path to the configuration file (json)</param>
         /// <param name="serve">Set to start dev server</param>
-        static async Task Main(FileInfo? configuration = null, bool serve = false)
+        private static async Task Main(FileInfo? configuration = null, bool serve = false)
         {
 
             const string workdirPath = "gitOut";
@@ -396,6 +434,9 @@ namespace Nota.Site.Generator
 
                         return files;
                     }, "Select Content Files from Ref")
+                       .Select(x =>
+                     x.EmbededXmp()
+                 )
                     ;
 
                 var allBooks = comninedFiles.ListToSingle(x =>
@@ -446,7 +487,7 @@ namespace Nota.Site.Generator
               ;
 
 
-                var removedDoubles = comninedFiles.Where(x => !IsHtml(x) && !IsMarkdown(x) && !IsMeta(x))
+                var removedDoubles = comninedFiles.Where(x => IsImage(x))
                      .Merge(imageData, (file, image) =>
                      {
                          var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
@@ -524,6 +565,17 @@ namespace Nota.Site.Generator
                         using var reader = new StreamReader(stream);
                         string text = reader.ReadToEnd();
                         var originalText = text;
+
+
+
+                        var angleSharpConfig = Configuration.Default;
+                        var angleSharpContext = BrowsingContext.New(angleSharpConfig);
+                        var parser = angleSharpContext.GetService<IHtmlParser>();
+                        var source = text;
+                        var document = parser.ParseDocument(source);
+
+
+
                         foreach (var removedDocument in removed.Value)
                         {
                             var metadata = removedDocument.Metadata.TryGetValue<ImageReferences>();
@@ -534,45 +586,68 @@ namespace Nota.Site.Generator
                                 ReadOnlySpan<char> relativeTo = NotaPath.GetFolder(input.Id).AsSpan();
                                 ReadOnlySpan<char> absolute = item.ReferencedId.AsSpan();
 
-var clipedRelative= GetFirstPart(relativeTo, out var relativeToRest);
-var clipedAbsolute =  GetFirstPart( absolute, out var absolutRest);
+                                var clipedRelative = GetFirstPart(relativeTo, out var relativeToRest);
+                                var clipedAbsolute = GetFirstPart(absolute, out var absolutRest);
 
-while( MemoryExtensions.Equals(clipedAbsolute , clipedRelative, StringComparison.Ordinal)){
-relativeTo = relativeToRest;
-absolute = absolutRest;
- clipedRelative= GetFirstPart(relativeTo, out relativeToRest);
- clipedAbsolute =  GetFirstPart( absolute, out  absolutRest);
+                                while (MemoryExtensions.Equals(clipedAbsolute, clipedRelative, StringComparison.Ordinal))
+                                {
+                                    relativeTo = relativeToRest;
+                                    absolute = absolutRest;
+                                    clipedRelative = GetFirstPart(relativeTo, out relativeToRest);
+                                    clipedAbsolute = GetFirstPart(absolute, out absolutRest);
 
-}
+                                }
 
-while(!GetFirstPart(relativeTo, out relativeToRest).IsEmpty){
-    relativeTo = relativeToRest;
-    absolute = ("../"+ absolute.ToString()).AsSpan();
-}
-
-
-
-ReadOnlySpan<char>  GetFirstPart(ReadOnlySpan<char> t, out ReadOnlySpan<char> rest){
-var index= t.IndexOf('/');
-if(index == -1)
-    { 
-     rest =  string.Empty;
-        return t;
-    }
-else{
-    rest = t[(index+1)..^0];
-    return t[0..index];
-    }
-}
-
-                                
+                                while (!GetFirstPart(relativeTo, out relativeToRest).IsEmpty)
+                                {
+                                    relativeTo = relativeToRest;
+                                    absolute = ("../" + absolute.ToString()).AsSpan();
+                                }
 
 
 
-                                text = text.Replace(absolute.ToString(), "/"+removedDocument.Id);
-                                text = text.Replace(item.ReferencedId, "/"+removedDocument.Id);
+                                ReadOnlySpan<char> GetFirstPart(ReadOnlySpan<char> t, out ReadOnlySpan<char> rest)
+                                {
+                                    var index = t.IndexOf('/');
+                                    if (index == -1)
+                                    {
+                                        rest = string.Empty;
+                                        return t;
+                                    }
+                                    else
+                                    {
+                                        rest = t[(index + 1)..^0];
+                                        return t[0..index];
+                                    }
+                                }
+                                var absoluteStr = absolute.ToString();
+                                // document.QuerySelectorAll($"img[src=\"{absolute.ToString()}\"").Attr("src", "/" + removedDocument.Id);
+                                // document.QuerySelectorAll($"img[src=\"{item.ReferencedId}\"").Attr("src", "/" + removedDocument.Id);
+
+                                foreach (var ele in document.All.Where(m => m.LocalName == "img" && m.Attributes.Any(x => x.LocalName == "src" && (x.Value == absoluteStr || x.Value == item.ReferencedId))))
+                                {
+                                    var licenseData = removedDocument.Metadata.TryGetValue<XmpMetadata>();
+
+                                    if (licenseData != null)
+                                    {
+                                        if (licenseData.RightsReserved.HasValue)
+                                            ele.SetAttribute("rightsReseved", licenseData.RightsReserved?.ToString());
+                                        if (licenseData.License != null)
+                                            ele.SetAttribute("license", Sanitize(licenseData.License));
+                                        if (licenseData.Creators != null)
+                                            ele.SetAttribute("creators", string.Join(", ", licenseData.Creators));
+                                    }
+
+                                    ele.SetAttribute("src", "/" + removedDocument.Id);
+                                }
+
+                                // document.QuerySelectorAll($"img[src=\"{item.ReferencedId}\"").;
+
+                                // text = text.Replace(absolute.ToString(), "/" + removedDocument.Id);
+                                // text = text.Replace(item.ReferencedId, "/" + removedDocument.Id);
                             }
                         }
+                        text = document.DocumentElement.OuterHtml;
                         if (originalText != text)
                         {
                             var data = Encoding.UTF8.GetBytes(text);
@@ -621,12 +696,10 @@ else{
                  //.EmbededXmp()
 
 
-                 .Select(x =>
-                 x
-                 .If(z => NotaPath.GetExtension(z.Id) == ".png")
-                 .Then(y => y.EmbededXmp())
-                 .Else(y => y)
-                 )
+                 //.Select(x =>
+                 //    x.EmbededXmp()
+                 //)
+                 .Where(x => x.Metadata.TryGetValue<XmpMetadata>() != null)
                     .ListToSingle(z =>
                     {
 
@@ -635,12 +708,10 @@ else{
 
                             LicenseInfos = z.Select(x =>
                             {
-                                using var stream = x.Value;
                                 return new LicenseInfo
                                 {
                                     Id = x.Id,
                                     Metadata = x.Metadata,
-                                    Hash = context.GetHashForStream(stream)
                                 };
                             }).ToArray()
                         }; ;

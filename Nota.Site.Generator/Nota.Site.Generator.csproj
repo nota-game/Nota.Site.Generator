@@ -12,6 +12,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="AngleSharp" Version="0.14.0" />
 		<PackageReference Include="MetadataExtractor" Version="2.4.3" />
 		<PackageReference Include="HtmlSanitizer" Version="5.0.355" />
 		<PackageReference Include="SourceLink.Copy.PdbFiles" Version="2.8.3">

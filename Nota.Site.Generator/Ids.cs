@@ -202,7 +202,6 @@ namespace Nota.Site.Generator
     {
         public string Id { get; set; }
         public MetadataContainer Metadata { get; set; }
-        public string Hash { get; set; }
     }
 
     public class AllBooksMetadata
