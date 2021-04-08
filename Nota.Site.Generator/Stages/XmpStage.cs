@@ -10,17 +10,9 @@ using System.Threading.Tasks;
 
 namespace Nota.Site.Generator.Stages
 {
-    public static partial class StageExtension
-    {
-        public static EmbededXmpStage<T> EmbededXmp<T>(this StageBase<Stream, T> input, string? name = null)
-            where T : class
-        {
-            return new EmbededXmpStage<T>(input, input.Context, name);
-        }
-    }
 
-    public class EmbededXmpStage<T> : Stasistium.Stages.GeneratedHelper.Single.Simple.OutputSingleInputSingleSimple1List0StageBase<Stream, T, Stream>
-        where T : class
+    public class EmbededXmpStage: Stasistium.Stages.StageBaseSimple<Stream, Stream>
+        
     {
         private static readonly ImmutableDictionary<string, string> namespaceAlias =
             new Dictionary<string, string>
@@ -32,208 +24,205 @@ namespace Nota.Site.Generator.Stages
                 { "xml", "http://www.w3.org/XML/1998/namespace" },
             }.ToImmutableDictionary();
 
-        public EmbededXmpStage(StageBase<Stream, T> inputSingle0, IGeneratorContext context, string? name) : base(inputSingle0, context, name)
+        public EmbededXmpStage(IGeneratorContext context, string? name) : base(context, name)
         {
         }
 
-        protected override async Task<IDocument<Stream>> Work(IDocument<Stream> input, OptionToken options)
+        protected override Task<IDocument<Stream>> Work(IDocument<Stream> input, OptionToken options)
         {
+            using var stream = input.Value;
+            MetadataExtractor.Formats.Xmp.XmpDirectory? readed;
 
-            using (var stream = input.Value)
+            try
             {
-                MetadataExtractor.Formats.Xmp.XmpDirectory? readed;
+                readed = ImageMetadataReader.ReadMetadata(stream).OfType<MetadataExtractor.Formats.Xmp.XmpDirectory>().FirstOrDefault();
+            }
+            catch (MetadataExtractor.ImageProcessingException)
+            {
+                readed = null;
+            }
 
-                try
+            if (readed?.XmpMeta is null)
+                return Task.FromResult(input);
+
+
+            var culture = new System.Globalization.CultureInfo("de-de");
+
+            var license = ToSearchLanguage("dc:rights", culture)
+                ?? ToSearchLanguage("xmpRights:UsageTerms", culture)
+                ?? ToSearchLanguage("cc:license", culture);
+
+            var creator = ToSearchArray("dc:creator");
+            if (creator is null || creator.Length == 0)
+            {
+                var ccCreator = ToSearch("cc:attributionName");
+                if (ccCreator != null)
+                    creator = new string[] { ccCreator };
+            }
+            bool? rightsReserved;
+            if (bool.TryParse(ToSearch("xmpRights:Marked"), out var rightsReservedValue))
+                rightsReserved = rightsReservedValue;
+            else
+                rightsReserved = null;
+
+            if (license == null && creator == null && rightsReserved == null)
+            {
+                return Task.FromResult(input);
+            }
+
+            return Task.FromResult(input.With(input.Metadata.Add(new XmpMetadata(creator, license, rightsReserved))));
+
+
+            string? ToSearch(string toSearch)
+            {
+                var xmpPropertyInfo = readed.XmpMeta.Properties.FirstOrDefault(x =>
                 {
-                    readed = ImageMetadataReader.ReadMetadata(stream).OfType<MetadataExtractor.Formats.Xmp.XmpDirectory>().FirstOrDefault();
-                }
-                catch (MetadataExtractor.ImageProcessingException)
+
+                    var (ns, name) = LocalName(toSearch);
+                    return x.Namespace == ns && LocalName(x.Path).localName == name;
+                });
+                if (xmpPropertyInfo is null)
+                    return null;
+
+                if (xmpPropertyInfo.Options.IsArray)
                 {
-                    readed = null;
-                }
+                    var data = new List<string>();
 
-                if (readed?.XmpMeta is null)
-                    return input;
-
-
-                var culture = new System.Globalization.CultureInfo("de-de");
-
-                var license = ToSearchLanguage("dc:rights", culture)
-                    ?? ToSearchLanguage("xmpRights:UsageTerms", culture)
-                    ?? ToSearchLanguage("cc:license", culture);
-
-                var creator = ToSearchArray("dc:creator");
-                if (creator is null || creator.Length == 0)
-                {
-                    var ccCreator = ToSearch("cc:attributionName");
-                    if (ccCreator != null)
-                        creator = new string[] { ccCreator };
-                }
-                bool? rightsReserved;
-                if (bool.TryParse(ToSearch("xmpRights:Marked"), out var rightsReservedValue))
-                    rightsReserved = rightsReservedValue;
-                else
-                    rightsReserved = null;
-
-                if (license == null && creator == null && rightsReserved == null)
-                {
-                    return input;
-                }
-
-                return input.With(input.Metadata.Add(new XmpMetadata(creator, license, rightsReserved)));
-
-
-                string ToSearch(string toSearch)
-                {
-                    var xmpPropertyInfo = readed.XmpMeta.Properties.FirstOrDefault(x =>
+                    var index = 1;
+                    while (true)
                     {
 
-                        var (ns, name) = LocalName(toSearch);
-                        return x.Namespace == ns && LocalName(x.Path).localName == name;
-                    });
-                    if (xmpPropertyInfo is null)
-                        return null;
+                        var entry = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]" == x.Path)?.Value;
 
-                    if (xmpPropertyInfo.Options.IsArray)
-                    {
-                        var data = new List<string>();
+                        if (entry is null)
+                            break;
 
-                        var index = 1;
-                        while (true)
-                        {
+                        data.Add(entry);
 
-                            var entry = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]" == x.Path)?.Value;
-
-                            if (entry is null)
-                                break;
-
-                            data.Add(entry);
-
-                            index++;
-                        }
-
-                        if (data.Count == 1)
-                            return data.First();
-
-                        if (data.Count == 0)
-                            return xmpPropertyInfo.Value;
-
-                        throw new InvalidOperationException($"Multiple elements found for {xmpPropertyInfo.Path}");
+                        index++;
                     }
 
-                    return xmpPropertyInfo?.Value;
+                    if (data.Count == 1)
+                        return data.First();
+
+                    if (data.Count == 0)
+                        return xmpPropertyInfo.Value;
+
+                    throw new InvalidOperationException($"Multiple elements found for {xmpPropertyInfo.Path}");
                 }
 
-                string[]? ToSearchArray(string toSearch)
+                return xmpPropertyInfo?.Value;
+            }
+
+            string[]? ToSearchArray(string toSearch)
+            {
+                var xmpPropertyInfo = readed.XmpMeta.Properties.FirstOrDefault(x =>
                 {
-                    var xmpPropertyInfo = readed.XmpMeta.Properties.FirstOrDefault(x =>
+
+                    var (ns, name) = LocalName(toSearch);
+                    return x.Namespace == ns && LocalName(x.Path).localName == name;
+                });
+                if (xmpPropertyInfo is null)
+                    return null;
+
+                if (xmpPropertyInfo.Options.IsArray)
+                {
+                    var data = new List<string>();
+
+                    var index = 1;
+                    while (true)
                     {
 
-                        var (ns, name) = LocalName(toSearch);
-                        return x.Namespace == ns && LocalName(x.Path).localName == name;
-                    });
-                    if (xmpPropertyInfo is null)
-                        return null;
+                        var entry = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]" == x.Path)?.Value;
 
-                    if (xmpPropertyInfo.Options.IsArray)
-                    {
-                        var data = new List<string>();
+                        if (entry is null)
+                            break;
 
-                        var index = 1;
-                        while (true)
-                        {
+                        data.Add(entry);
 
-                            var entry = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]" == x.Path)?.Value;
-
-                            if (entry is null)
-                                break;
-
-                            data.Add(entry);
-
-                            index++;
-                        }
-
-
-                        if (data.Count > 0)
-                            return data.ToArray();
-
+                        index++;
                     }
 
-                    return new string[] { xmpPropertyInfo?.Value };
+
+                    if (data.Count > 0)
+                        return data.ToArray();
+
                 }
 
-                string? ToSearchLanguage(string toSearch, System.Globalization.CultureInfo language)
+                var propertyValue = xmpPropertyInfo?.Value;
+                if (propertyValue is null)
+                    return null;
+                return new string[] { propertyValue };
+            }
+
+            string? ToSearchLanguage(string toSearch, System.Globalization.CultureInfo language)
+            {
+                var xmpPropertyInfo = readed.XmpMeta.Properties.FirstOrDefault(x =>
                 {
-                    var xmpPropertyInfo = readed.XmpMeta.Properties.FirstOrDefault(x =>
+
+                    var (ns, name) = LocalName(toSearch);
+                    return x.Namespace == ns && LocalName(x.Path).localName == name;
+                });
+                if (xmpPropertyInfo is null)
+                    return null;
+
+                if (xmpPropertyInfo.Options.IsArray)
+                {
+                    var data = new List<(string value, string? lang)>();
+
+                    var index = 1;
+                    while (true)
                     {
 
-                        var (ns, name) = LocalName(toSearch);
-                        return x.Namespace == ns && LocalName(x.Path).localName == name;
-                    });
-                    if (xmpPropertyInfo is null)
-                        return null;
+                        var entry = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]" == x.Path)?.Value;
+                        var lang = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]/xml:lang" == x.Path)?.Value;
 
-                    if (xmpPropertyInfo.Options.IsArray)
-                    {
-                        var data = new List<(string value, string? lang)>();
+                        if (entry is null)
+                            break;
 
-                        var index = 1;
-                        while (true)
-                        {
+                        data.Add((entry, lang));
 
-                            var entry = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]" == x.Path)?.Value;
-                            var lang = readed.XmpMeta.Properties.FirstOrDefault(x => $"{xmpPropertyInfo.Path}[{index}]/xml:lang" == x.Path)?.Value;
-
-                            if (entry is null)
-                                break;
-
-                            data.Add((entry, lang));
-
-                            index++;
-                        }
-
-                        if (data.Count == 0)
-                            return xmpPropertyInfo.Value;
-
-                        var currentClture = language;
-
-                        while (true)
-                        {
-                            if (currentClture == System.Globalization.CultureInfo.InvariantCulture)
-                            {
-                                return data.FirstOrDefault(x => x.lang == "x-default").value
-                                         ?? data.FirstOrDefault(x => string.IsNullOrEmpty(x.lang)).value;
-                            }
-
-                            var result = data.FirstOrDefault(x => x.lang == currentClture.Name).value;
-                            if (result != null)
-                                return result;
-
-                            currentClture = currentClture.Parent;
-                        }
-
-
+                        index++;
                     }
 
-                    return xmpPropertyInfo?.Value;
+                    if (data.Count == 0)
+                        return xmpPropertyInfo.Value;
+
+                    var currentClture = language;
+
+                    while (true)
+                    {
+                        if (currentClture == System.Globalization.CultureInfo.InvariantCulture)
+                        {
+                            return data.FirstOrDefault(x => x.lang == "x-default").value
+                                     ?? data.FirstOrDefault(x => string.IsNullOrEmpty(x.lang)).value;
+                        }
+
+                        var result = data.FirstOrDefault(x => x.lang == currentClture.Name).value;
+                        if (result != null)
+                            return result;
+
+                        currentClture = currentClture.Parent;
+                    }
+
+
                 }
 
-
-                static (string? @namespace, string localName) LocalName(ReadOnlySpan<char> input)
-                {
-                    var splitposition = input.IndexOf(':');
-                    if (splitposition == -1)
-                        return (default, input.ToString());
-                    var ns = input.Slice(0, splitposition);
-
-                    if (!namespaceAlias.TryGetValue(ns.ToString(), out string? nsResult))
-                        nsResult = default;
-
-                    return (nsResult, input.Slice(splitposition + 1).ToString());
-                }
+                return xmpPropertyInfo?.Value;
+            }
 
 
+            static (string? @namespace, string localName) LocalName(ReadOnlySpan<char> input)
+            {
+                var splitposition = input.IndexOf(':');
+                if (splitposition == -1)
+                    return (default, input.ToString());
+                var ns = input.Slice(0, splitposition);
 
+                if (!namespaceAlias.TryGetValue(ns.ToString(), out string? nsResult))
+                    nsResult = default;
+
+                return (nsResult, input[(splitposition + 1)..].ToString());
             }
 
         }

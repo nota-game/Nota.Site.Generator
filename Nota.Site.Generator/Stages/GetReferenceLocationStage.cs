@@ -5,7 +5,6 @@ using System.Collections.Immutable;
 using Stasistium.Stages;
 using Nota.Site.Generator.Stages;
 using Nota.Site.Generator.Markdown.Blocks;
-using Stasistium.Core;
 using System.Collections.Generic;
 using System;
 using System.Linq;
@@ -17,27 +16,20 @@ using AdaptMark.Markdown.Blocks;
 namespace Nota.Site.Generator.Stages
 {
 
-    public class GetReferenceLocationStage<TCache> : StageBase<MarkdownDocument, GetReferenceLocationStageCache<TCache>>
-       where TCache : class
+    public class GetReferenceLocationStage : StageBase<MarkdownDocument, MarkdownDocument>
     {
 
 
 
-        private readonly StageBase<MarkdownDocument, TCache> input;
 
-        public GetReferenceLocationStage(StageBase<MarkdownDocument, TCache> input, IGeneratorContext context, string? name = null) : base(context, name)
+        public GetReferenceLocationStage(IGeneratorContext context, string? name = null) : base(context, name)
         {
-            this.input = input ?? throw new ArgumentNullException(nameof(input));
         }
 
-        protected override async Task<StageResult<MarkdownDocument, GetReferenceLocationStageCache<TCache>>> DoInternal(GetReferenceLocationStageCache<TCache>? cache, OptionToken options)
+        protected override Task<ImmutableList<IDocument<MarkdownDocument>>> Work(ImmutableList<IDocument<MarkdownDocument>> input, OptionToken options)
         {
-
-            var result = await this.input.DoIt(cache?.PreviousCache, options);
-
-            var task = LazyTask.Create(async () =>
+            return Task.FromResult(input.Select(docDocument =>
             {
-                var docDocument = await result.Perform;
 
                 var headers = new Stack<HeaderBlock>();
                 var list = new List<ImageReference>();
@@ -80,13 +72,13 @@ namespace Nota.Site.Generator.Stages
                                     string headerString;
                                     if (headers.Count > 0)
                                     {
-                                        if (headers.Peek() is ChapterHeaderBlock chapterHeaderBlock)
+                                        if (headers.Peek() is ChapterHeaderBlock chapterHeaderBlock && chapterHeaderBlock.ChapterId is not null)
                                         {
                                             headerString = chapterHeaderBlock.ChapterId;
                                         }
                                         else
                                         {
-                                            headerString = StichStage<object, object>.GenerateHeaderString(headers);
+                                            headerString = StichStage.GenerateHeaderString(headers);
                                         }
                                     }
                                     else
@@ -117,48 +109,11 @@ namespace Nota.Site.Generator.Stages
 
                 var document = docDocument.With(docDocument.Metadata.Add(data));
 
-                var cached = new GetReferenceLocationStageCache<TCache>()
-                {
-                    Hash = document.Hash,
-                    PreviousCache = result.Cache,
-                    //ReferenceCaches = list.ToDictionary(x => x.Document, x => new ImageReference() { ReferencedId = x.ReferencedId, Document = x.Document, Header = x.Header })
-                };
 
+                return document;
+            }).ToImmutableList());
 
-                return (document, cached);
-            });
-
-            bool hasChanges = result.HasChanges;
-            GetReferenceLocationStageCache<TCache> newCache;
-
-            if (hasChanges || cache is null)
-            {
-                IDocument<MarkdownDocument> resultDocument;
-                (resultDocument, newCache) = await task;
-
-
-
-                hasChanges = cache is null
-                || cache.Hash != newCache.Hash;
-
-            }
-            else
-            {
-                newCache = cache;
-            }
-
-
-            var actualTask = LazyTask.Create(async () =>
-            {
-                var temp = await task;
-                return temp.document;
-            });
-
-            return this.Context.CreateStageResult(actualTask, hasChanges, result.Hash, newCache, newCache.Hash, result.Cache);
         }
-
-
-
     }
 
 
@@ -173,33 +128,5 @@ namespace Nota.Site.Generator.Stages
     public class ImageReferences
     {
         public ImageReference[] References { get; set; }
-    }
-
-    public class GetReferenceLocationStageCache<TCache> : IHavePreviousCache<TCache>
-         where TCache : class
-
-    {
-        public TCache PreviousCache { get; set; }
-
-
-        //public Dictionary<string, ImageReference> ReferenceCaches { get; set; }
-
-        public string Hash { get; set; }
-    }
-
-
-
-}
-namespace Nota.Site.Generator
-{
-    public static partial class StageExtensions
-    {
-
-        public static GetReferenceLocationStage<TCache> GetReferenceLocations<TCache>(this StageBase<MarkdownDocument, TCache> input, string? name = null)
-        where TCache : class
-
-        {
-            return new GetReferenceLocationStage<TCache>(input, input.Context, name);
-        }
     }
 }

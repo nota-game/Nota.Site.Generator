@@ -5,7 +5,6 @@ using AngleSharp.Text;
 using Nota.Site.Generator.Markdown.Blocks;
 using Nota.Site.Generator.Stages;
 using Stasistium;
-using Stasistium.Core;
 using Stasistium.Documents;
 using Stasistium.Stages;
 using System;
@@ -19,387 +18,160 @@ using System.Threading.Tasks;
 
 namespace Nota.Site.Generator.Stages
 {
-    public class StichStage<TItemCache, TCache> : Stasistium.Stages.MultiStageBase<MarkdownDocument, string, StichCache<TCache>>
-        where TCache : class
-        where TItemCache : class
+    public class StichStage : Stasistium.Stages.StageBase<MarkdownDocument, MarkdownDocument>
     {
         private const string NoChapterName = "index";
-        private readonly MultiStageBase<MarkdownDocument, TItemCache, TCache> input;
         private readonly int chapterSeperation;
 
-        public StichStage(MultiStageBase<MarkdownDocument, TItemCache, TCache> input, int chapterSeperation, IGeneratorContext context, string? name = null) : base(context, name)
+        public StichStage(int chapterSeperation, IGeneratorContext context, string? name = null) : base(context, name)
         {
-            this.input = input ?? throw new ArgumentNullException(nameof(input));
             this.chapterSeperation = chapterSeperation;
         }
 
-        protected override async Task<StageResultList<MarkdownDocument, string, StichCache<TCache>>> DoInternal(StichCache<TCache>? cache, OptionToken options)
+        protected override async Task<ImmutableList<IDocument<MarkdownDocument>>> Work(ImmutableList<IDocument<MarkdownDocument>> input, OptionToken options)
         {
-            var result = await this.input.DoIt(cache?.PreviousCache, options);
 
-            var task = LazyTask.Create(async () =>
+            var performed = input;
+            var list = ImmutableList<IDocument<MarkdownDocument>>.Empty.ToBuilder();
+
+            var stateLookup = performed.ToDictionary(x => x.Id);
+            var idToAfter = new Dictionary<string, string>();
+
+            var documentsWithChapters = new HashSet<string>();
+
+            foreach (var item in performed)
             {
-
-                var performed = await result.Perform;
-                var list = ImmutableList<StageResult<MarkdownDocument, string>>.Empty.ToBuilder();
-                StichCache<TCache> newCache;
-
-                if (cache is null)
+                var resolver = new RelativePathResolver(item.Id, input.Select(x => x.Id));
+                var itemTask = item;
+                var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
+                if (order?.After != null)
                 {
-                    var stateLookup = performed.ToDictionary(x => x.Id);
-                    var idToAfter = new Dictionary<string, string>();
-
-                    var documentsWithChapters = new HashSet<string>();
-
-                    foreach (var item in performed)
-                    {
-                        var resolver = new RelativePathResolver(item.Id, result.Ids);
-                        var itemTask = await item.Perform;
-                        var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
-                        if (order?.After != null)
-                        {
-                            var resolved = resolver[order.After];
-                            idToAfter[itemTask.Id] = resolved;
-                        }
-
-                        if (this.ContainsChapters(itemTask.Value.Blocks))
-                            documentsWithChapters.Add(itemTask.Id);
-
-                    }
-
-
-                    // check for wrong Pathes
-                    var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x => x.Key);
-                    if (wrongPathes.Any())
-                    {
-                        throw this.Context.Exception($"The after pathes of following documents could not be resolved: {string.Join(", ", wrongPathes)}");
-                    }
-
-                    // check for double entrys
-
-                    var problems = idToAfter
-                        .GroupBy(x => x.Value)
-                        .Where(x => x.Count() > 1)
-                        .Select(x => $"The documents { string.Join(", ", x.Select(y => y.Key)) } all follow {x.Key}. Only one is allowed");
-
-                    var problemString = string.Join("\n", problems);
-
-                    if (problemString != string.Empty)
-                        throw this.Context.Exception("Ther were a problem with the ordering\n" + problemString);
-
-                    var orderedList = new List<string>();
-
-                    var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
-
-                    if (stateLookup.Count != 1)
-                    {
-                        // check for circles or gaps
-                        if (startValues.Length == 0)
-                            // we have a circle.
-                            throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
-                        if (startValues.Length > 1)
-                            throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
-
-                        // Order the entrys.
-                        {
-                            var current = startValues.Single().Key;
-                            while (true)
-                            {
-                                orderedList.Insert(0, current);
-                                if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
-                                    break;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        orderedList.Add(stateLookup.First().Key);
-                    }
-
-                    await this.UpdateHeadersWithContaining(orderedList, stateLookup);
-
-                    // partition the list with chepters
-
-                    var chapterPartitions = new List<List<string>>();
-
-
-                    List<string>? currentChapterIds = null;
-
-                    foreach (var id in orderedList)
-                    {
-                        if (currentChapterIds is null)
-                        {
-                            currentChapterIds = new List<string>();
-                            chapterPartitions.Add(currentChapterIds);
-                            currentChapterIds.Add(id);
-                        }
-                        else if (documentsWithChapters.Contains(id))
-                        {
-                            // since a document may not start with a new chapter but can contain text befor that from a
-                            // previous chapter we add this Id also to the previous chapter.
-                            currentChapterIds.Add(id);
-                            currentChapterIds = new List<string>();
-                            chapterPartitions.Add(currentChapterIds);
-                            currentChapterIds.Add(id);
-                        }
-                        else
-                        {
-                            currentChapterIds.Add(id);
-                        }
-                    }
-                    var newPatirions = new List<Partition>();
-                    for (int i = 0; i < chapterPartitions.Count; i++)
-                    {
-                        var currentParition = chapterPartitions[i];
-                        var takeFirstWithoutChapter = i == 0;
-                        var takeLastChapter = i == chapterPartitions.Count - 1;
-
-                        var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
-
-                        var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
-
-                        var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
-                        var partitition = new Partition
-                        {
-                            Ids = currentParition.ToArray(),
-                            Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray()
-                        };
-
-                        newPatirions.Add(partitition);
-                        foreach (var item in documentsInPartition)
-                        {
-
-                            list.Add(StageResult.CreateStageResult(this.Context, item, true, item.Id, item.Hash, item.Hash));
-                        }
-
-
-                    }
-
-                    newCache = new StichCache<TCache>()
-                    {
-                        DocumentsWithChapters = documentsWithChapters.ToArray(),
-                        IDToAfterEntry = idToAfter,
-                        Partitions = newPatirions.ToArray(),
-                        PreviousCache = result.Cache,
-                        Hash = this.Context.GetHashForObject(list.Select(x => x.Hash)),
-                    };
-                }
-                else
-                {
-                    var stateLookup = performed.ToDictionary(x => x.Id);
-                    var idToAfter = cache.IDToAfterEntry.ToDictionary(x => x.Key, x => x.Value);
-
-                    var documentsWithChapters = new HashSet<string>(cache.DocumentsWithChapters);
-
-                    foreach (var item in performed)
-                    {
-                        if (item.HasChanges)
-                        {
-                            var resolver = new RelativePathResolver(item.Id, result.Ids);
-                            var itemTask = await item.Perform;
-                            var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
-                            if (order?.After != null)
-                                idToAfter[itemTask.Id] = resolver[order.After];
-                            else
-                                idToAfter.Remove(itemTask.Id);
-
-                            if (this.ContainsChapters(itemTask.Value.Blocks))
-                                documentsWithChapters.Add(itemTask.Id);
-                            else
-                                documentsWithChapters.Remove(itemTask.Id);
-
-                        }
-                    }
-
-                    // check for double entrys
-
-                    var problems = idToAfter
-                        .GroupBy(x => x.Value)
-                        .Where(x => x.Count() > 1)
-                        .Select(x => $"The documents { string.Join(", ", x.Select(y => y.Key)) } all follow {x.Key}. Only one is allowed");
-
-                    var problemString = string.Join("\n", problems);
-
-                    if (problemString != string.Empty)
-                        throw this.Context.Exception("Ther were a problem with the ordering\n" + problemString);
-
-                    var orderedList = new List<string>();
-
-                    if (stateLookup.Count != 1)
-                    {
-                        var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
-
-                        // check for circles or gaps
-                        if (startValues.Length == 0)
-                            // we have a circle.
-                            throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
-                        if (startValues.Length > 1)
-                            throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
-
-                        // Order the entrys.
-                        {
-                            var current = startValues.Single().Key;
-                            while (true)
-                            {
-                                orderedList.Insert(0, current);
-                                if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
-                                    break;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        orderedList.Add(stateLookup.First().Key);
-                    }
-
-                    // partition the list with chepters
-
-                    var chapterPartitions = new List<List<string>>();
-
-                    //TODO: find a way to only resolve the change documents
-                    // I need propably to cache the last header, its level and the parent header
-                    // of each document. In additon the replacement of Header with ChapterHader 
-                    // needs to be performed lazy when a document is requested later.
-                    // This looks like so much trouble...
-                    await this.UpdateHeadersWithContaining(orderedList, stateLookup);
-
-
-                    List<string>? currentChapterIds = null;
-
-                    foreach (var id in orderedList)
-                    {
-                        if (currentChapterIds is null)
-                        {
-                            currentChapterIds = new List<string>();
-                            chapterPartitions.Add(currentChapterIds);
-                            currentChapterIds.Add(id);
-                        }
-                        else if (documentsWithChapters.Contains(id))
-                        {
-                            // since a document may not start with a new chapter but can contain text befor that from a
-                            // previous chapter we add this Id also to the previous chapter.
-                            currentChapterIds.Add(id);
-                            currentChapterIds = new List<string>();
-                            chapterPartitions.Add(currentChapterIds);
-                            currentChapterIds.Add(id);
-                        }
-                        else
-                        {
-                            currentChapterIds.Add(id);
-                        }
-                    }
-                    var newPatirions = new List<Partition>();
-                    for (int i = 0; i < chapterPartitions.Count; i++)
-                    {
-                        var currentParition = chapterPartitions[i];
-                        var takeFirstWithoutChapter = i == 0;
-                        var takeLastChapter = i == chapterPartitions.Count - 1;
-                        var cachePartition = cache.Partitions.FirstOrDefault(x => x.Ids.FirstOrDefault() == currentParition.First());
-                        if (!(cachePartition?.Ids.SequenceEqual(currentParition) ?? false)
-                            || currentParition.Select(x => stateLookup[x].HasChanges).Any())
-                        {
-                            var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
-
-                            var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
-
-                            var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
-
-
-                            var partitition = new Partition
-                            {
-                                Ids = currentParition.ToArray(),
-                                Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray()
-                            };
-
-                            newPatirions.Add(partitition);
-                            foreach (var item in documentsInPartition)
-                            {
-                                var oldHash = cachePartition?.Documents.FirstOrDefault(x => x.Id == item.Id).Hash;
-                                list.Add(StageResult.CreateStageResult(this.Context, item, oldHash != item.Hash, item.Id, item.Hash, item.Hash));
-                            }
-                        }
-                        else
-                        {
-                            newPatirions.Add(cachePartition);
-
-                            var baseTask = LazyTask.Create(async () =>
-                            {
-                                var documents = await Task.WhenAll(currentParition.Select(x => stateLookup[x].Perform.AsTask())).ConfigureAwait(false);
-
-                                var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
-                                var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
-
-                                return documentsInPartition;
-                            });
-
-                            foreach (var (oldId, oldHash) in cachePartition.Documents)
-                            {
-                                var task = LazyTask.Create(async () =>
-                                {
-                                    var x = await baseTask;
-                                    return x.First(x => x.Id == oldId && x.Hash == oldHash);
-                                });
-                                list.Add(StageResult.CreateStageResult(this.Context, task, false, oldId, oldHash, oldHash));
-                            }
-
-                        }
-
-                    }
-
-                    newCache = new StichCache<TCache>()
-                    {
-                        DocumentsWithChapters = documentsWithChapters.ToArray(),
-                        IDToAfterEntry = idToAfter,
-                        Partitions = newPatirions.ToArray(),
-                        PreviousCache = result.Cache,
-                        Hash = this.Context.GetHashForObject(list.Select(x => x.Hash)),
-                    };
-
+                    var resolved = resolver[order.After];
+                    if (resolved is not null)
+                        idToAfter[itemTask.Id] = resolved;
                 }
 
+                if (this.ContainsChapters(itemTask.Value.Blocks))
+                    documentsWithChapters.Add(itemTask.Id);
+            }
 
 
-
-
-
-                return (list.ToImmutable(), newCache);
-            });
-
-            ImmutableList<string> ids;
-            var hasChanges = false;
-
-            if (cache is null || result.HasChanges)
+            // check for wrong Pathes
+            var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x => x.Key);
+            if (wrongPathes.Any())
             {
-                var (performed, newCache) = await task;
-                ids = performed.Select(x => x.Id).ToImmutableList();
-                if (cache is null)
-                {
-                    hasChanges = true;
-                }
-                else
-                {
-                    hasChanges = !cache.Partitions.SelectMany(x => x.Documents).Select(x => x.Id).SequenceEqual(ids)
-                        || performed.Any(x => x.HasChanges);
-                }
+                throw this.Context.Exception($"The after pathes of following documents could not be resolved: {string.Join(", ", wrongPathes)}");
+            }
 
-                return this.Context.CreateStageResultList(performed, hasChanges, ids, newCache, newCache.Hash, result.Cache);
+            // check for double entrys
+
+            var problems = idToAfter
+                .GroupBy(x => x.Value)
+                .Where(x => x.Count() > 1)
+                .Select(x => $"The documents { string.Join(", ", x.Select(y => y.Key)) } all follow {x.Key}. Only one is allowed");
+
+            var problemString = string.Join("\n", problems);
+
+            if (problemString != string.Empty)
+                throw this.Context.Exception("Ther were a problem with the ordering\n" + problemString);
+
+            var orderedList = new List<string>();
+
+            var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
+
+            if (stateLookup.Count != 1)
+            {
+                // check for circles or gaps
+                if (startValues.Length == 0)
+                    // we have a circle.
+                    throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
+                if (startValues.Length > 1)
+                    throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
+
+                // Order the entrys.
+                {
+                    var current = startValues.Single().Key;
+                    while (true)
+                    {
+                        orderedList.Insert(0, current);
+                        if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
+                            break;
+                    }
+                }
             }
             else
-                ids = cache.Partitions.SelectMany(x => x.Documents).Select(x => x.Id).ToImmutableList();
-            var actualTask = LazyTask.Create(async () =>
             {
-                var temp = await task;
-                return temp.Item1;
-            });
-            return this.Context.CreateStageResultList(actualTask, hasChanges, ids, cache, cache.Hash, result.Cache);
+                orderedList.Add(stateLookup.First().Key);
+            }
+
+            await this.UpdateHeadersWithContaining(orderedList, stateLookup);
+
+            // partition the list with chepters
+
+            var chapterPartitions = new List<List<string>>();
+
+
+            List<string>? currentChapterIds = null;
+
+            foreach (var id in orderedList)
+            {
+                if (currentChapterIds is null)
+                {
+                    currentChapterIds = new List<string>();
+                    chapterPartitions.Add(currentChapterIds);
+                    currentChapterIds.Add(id);
+                }
+                else if (documentsWithChapters.Contains(id))
+                {
+                    // since a document may not start with a new chapter but can contain text befor that from a
+                    // previous chapter we add this Id also to the previous chapter.
+                    currentChapterIds.Add(id);
+                    currentChapterIds = new List<string>();
+                    chapterPartitions.Add(currentChapterIds);
+                    currentChapterIds.Add(id);
+                }
+                else
+                {
+                    currentChapterIds.Add(id);
+                }
+            }
+            var newPatirions = new List<Partition>();
+            for (int i = 0; i < chapterPartitions.Count; i++)
+            {
+                var currentParition = chapterPartitions[i];
+                var takeFirstWithoutChapter = i == 0;
+                var takeLastChapter = i == chapterPartitions.Count - 1;
+
+                var documents = currentParition.Select(x => stateLookup[x]);
+
+                var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
+
+                var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
+                var partitition = new Partition
+                {
+                    Ids = currentParition.ToArray(),
+                    Documents = documentsInPartition.Select(x => (x.Id, x.Hash)).ToArray()
+                };
+
+                newPatirions.Add(partitition);
+                foreach (var item in documentsInPartition)
+                {
+
+                    list.Add(item);
+                }
+
+
+            }
+
+            return list.ToImmutable();
+
         }
 
-        private async Task UpdateHeadersWithContaining(List<string> orderedList, Dictionary<string, StageResult<MarkdownDocument, TItemCache>> stateLookup)
+        private async Task UpdateHeadersWithContaining(List<string> orderedList, Dictionary<string, IDocument<MarkdownDocument>> stateLookup)
         {
             var headerStack = new Stack<HeaderBlock>();
-            foreach (var item in orderedList.Select(async x => (await stateLookup[x].Perform).Value))
+            foreach (var doc in orderedList.Select(x => stateLookup[x].Value))
             {
-                var doc = await item;
                 var blocks = doc.Blocks;
                 ScanAndReplace(blocks);
                 void ScanAndReplace(IList<MarkdownBlock> blocks)
@@ -450,7 +222,7 @@ namespace Nota.Site.Generator.Stages
             return id;
         }
 
-        private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IDocument<MarkdownDocument>[] documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
+        private IDocument<MarkdownDocument>[] GetDocumentsInPartition(IEnumerable<IDocument<MarkdownDocument>> documents, List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition)
         {
             return listOfChaptersInPartition.Select(x =>
             {
@@ -464,7 +236,8 @@ namespace Nota.Site.Generator.Stages
                     return wrapper;
                 });
 
-                var newDoc = documents.First().Value.GetBuilder().Build();
+                var firstDocument = documents.First();
+                var newDoc = firstDocument.Value.GetBuilder().Build();
                 newDoc.Blocks = referenceBlocks.ToArray();
                 var firstBlock = newDoc.Blocks.First();
 
@@ -477,16 +250,18 @@ namespace Nota.Site.Generator.Stages
                 else if (firstBlock is HeaderBlock headerBlock)
                     chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
                 else
-                    chapterName = StichStage<TItemCache, TCache>.NoChapterName;
+                    chapterName = StichStage.NoChapterName;
 
                 chapterName = System.IO.Path.GetInvalidFileNameChars().Aggregate(chapterName, (filename, invalidChar) => filename.Replace(invalidChar.ToString(), invalidChar.ToHex()), x => x);
 
-                return documents.First().With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
+                return firstDocument.With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
             }).ToArray();
         }
 
-        private List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> GetChaptersInPartitions(bool takeFirstWithoutChapter, bool takeLastChapter, IDocument<MarkdownDocument>[] documents)
+        private List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> GetChaptersInPartitions(bool takeFirstWithoutChapter, bool takeLastChapter, IEnumerable<IDocument<MarkdownDocument>> documents)
         {
+            if (documents is not IList<IDocument<MarkdownDocument>> documentList)
+                documentList = documents.ToArray();
             var listOfChaptersInPartition = new List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>>();
 
             List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>? currentList = null;
@@ -497,9 +272,9 @@ namespace Nota.Site.Generator.Stages
                 listOfChaptersInPartition.Add(currentList);
             }
 
-            for (int j = 0; j < documents.Length; j++)
+            for (int j = 0; j < documentList.Count; j++)
             {
-                var currentDocument = documents[j];
+                var currentDocument = documentList[j];
                 ScanBlocks(currentDocument.Value.Blocks);
                 void ScanBlocks(IList<MarkdownBlock> blocks)
                 {
@@ -514,7 +289,7 @@ namespace Nota.Site.Generator.Stages
                             currentList.Add((currentDocument, block));
 
                         else if (block is HeaderBlock header && header.HeaderLevel <= this.chapterSeperation
-                            && (j != documents.Length - 1 // the last block is also the first of the nex partition
+                            && (j != documentList.Count - 1 // the last block is also the first of the nex partition
                                 || takeLastChapter)) // we don't want to have (double) unless its the last partition.
                         {
                             currentList = new List<(IDocument<MarkdownDocument>, MarkdownBlock)>();
@@ -522,7 +297,7 @@ namespace Nota.Site.Generator.Stages
                             currentList.Add((currentDocument, block));
                         }
                         else if (block is HeaderBlock header__ && header__.HeaderLevel <= this.chapterSeperation
-                            && j == documents.Length - 1)
+                            && j == documentList.Count - 1)
                         {
                             // we wan't to break the for not foreach, but we are alreary in the last for loop.
                             break; // so this is enough
@@ -565,30 +340,4 @@ namespace Nota.Site.Generator.Stages
         public (string Id, string Hash)[] Documents { get; set; }
     }
 
-    public class StichCache<TCache> : IHavePreviousCache<TCache>
-        where TCache : class
-    {
-        public TCache PreviousCache { get; set; }
-
-        public Dictionary<string, string> IDToAfterEntry { get; set; }
-
-        public string[] DocumentsWithChapters { get; set; }
-
-        public Partition[] Partitions { get; set; }
-        public string Hash { get; set; }
-    }
-
-}
-
-namespace Nota.Site.Generator
-{
-    public static partial class StageExtensions
-    {
-        public static StichStage<TListItemCache, TListCache> Stich<TListItemCache, TListCache>(this MultiStageBase<MarkdownDocument, TListItemCache, TListCache> input, int chapterSeperation, string? name = null)
-        where TListItemCache : class
-        where TListCache : class
-        {
-            return new StichStage<TListItemCache, TListCache>(input, chapterSeperation, input.Context, name);
-        }
-    }
 }

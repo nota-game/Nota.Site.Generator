@@ -5,146 +5,168 @@ using System.Threading.Tasks;
 using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.Linq;
-using Stasistium.Core;
 using Stasistium.Stages;
 
 namespace Stasistium.Stages
 {
 
-    public class IfStage<TInput, TInputCache, TCacheTrue, TCacheFalse, TResult> : StageBase<TResult, IfCache<TInputCache, TCacheTrue, TCacheFalse>>
-    where TCacheTrue : class
-    where TCacheFalse : class
-    where TInputCache : class
+    public class IfStage<TInput, TResult> : StageBase<TInput, TResult>
     {
+        private readonly Func<IDocument<TInput>, bool> predicates;
+        private readonly SubPipline<TInput, TResult> trueP;
+        private readonly SubPipline<TInput, TResult> falseP;
+        private readonly IStageBaseOutput<TResult> falseResult;
+        private readonly IStageBaseOutput<TResult> trueResult;
 
-
-
-        private readonly Func<StageBase<TInput, string>, StageBase<TResult, TCacheTrue>> piplinesTrue;
-        private readonly Func<StageBase<TInput, string>, StageBase<TResult, TCacheFalse>> piplinesFalse;
-        //private readonly Func<StageBase<TInput, StartCache<TInputCache>>, StageBase<TResult, TItemCache>>[] createPiplines;
-        private readonly Func<IDocument<TInput>, Task<bool>> predicates;
-        private readonly StageBase<TInput, TInputCache> input;
-
-        public IfStage(StageBase<TInput, TInputCache> input, Func<IDocument<TInput>, Task<bool>> predicates, Func<StageBase<TInput, string>, StageBase<TResult, TCacheTrue>> piplinesTrue, Func<StageBase<TInput, string>, StageBase<TResult, TCacheFalse>> piplinesFalse, IGeneratorContext context, string? name = null) : base(context, name)
+        public IfStage(Func<IDocument<TInput>, bool> predicates, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TResult>> piplinesTrue, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TResult>> piplinesFalse, IGeneratorContext context, string? name = null) : base(context, name)
         {
-            this.input = input ?? throw new ArgumentNullException(nameof(input));
             this.predicates = predicates;
-            this.piplinesTrue = piplinesTrue;
-            this.piplinesFalse = piplinesFalse;
-        }
-
-        protected override async Task<StageResult<TResult, IfCache<TInputCache, TCacheTrue, TCacheFalse>>> DoInternal(IfCache<TInputCache, TCacheTrue, TCacheFalse>? cache, OptionToken options)
-        {
-
-            var result = await this.input.DoIt(cache?.PreviousCache, options);
-
-            var task = LazyTask.Create(async () =>
-            {
-                var performed = await result.Perform;
-
-                var isTrue = await this.predicates.Invoke(performed);
-
-                TCacheTrue? trueCache = null;
-                TCacheFalse? falseCache = null;
-                IDocument<TResult> resultDocument;
-                if (isTrue)
-                {
-                    var trueResult = await this.piplinesTrue(new Start(performed, this.Context)).DoIt(cache?.TrueCache, options);
-                    trueCache = trueResult.Cache;
-                    resultDocument = await trueResult.Perform;
-                }
-                else
-                {
-                    var falseResult = await this.piplinesFalse(new Start(performed, this.Context)).DoIt(cache?.FalseCache, options);
-                    falseCache = falseResult.Cache;
-                    resultDocument = await falseResult.Perform;
-                }
-
-                return (resultDocument, trueCache, falseCache);
-            });
-
-            string documentId;
-            bool hasChanges = result.HasChanges;
-            IfCache<TInputCache, TCacheTrue, TCacheFalse> newCache;
-
-            if (hasChanges || cache is null)
-            {
-                var (resultDocument, trueCache, falseCache) = await task;
-
-                newCache = new IfCache<TInputCache, TCacheTrue, TCacheFalse>(
-                    result.Cache,
-                    trueCache,
-                    falseCache,
-                    resultDocument.Id,
-                    resultDocument.Hash
-                );
-                documentId = resultDocument.Id;
-
-                hasChanges = cache is null
-                    || cache.Hash != newCache.Hash;
-
-            }
-            else
-            {
-                newCache = cache;
-                documentId = cache.DocumentId;
-            }
-
-
-            var actualTask = LazyTask.Create(async () =>
-            {
-                var temp = await task;
-                return temp.resultDocument;
-            });
-
-            return this.Context.CreateStageResult(actualTask, hasChanges, documentId, newCache, newCache.Hash, result.Cache);
+            (this.trueP, this.trueResult) = SubPipeline.Create(piplinesTrue, this.Context);
+            (this.falseP, this.falseResult) = SubPipeline.Create(piplinesFalse, this.Context);
         }
 
 
-        private class Start : StageBase<TInput, string>
+        protected override async Task<ImmutableList<IDocument<TResult>>> Work(ImmutableList<IDocument<TInput>> input, OptionToken options)
         {
+            var trueDocuments = input.Where(this.predicates).ToImmutableList();
+            var falseDocuments = input.Except(trueDocuments).ToImmutableList();
 
-            private readonly IDocument<TInput> document;
+            var builder = ImmutableList.CreateBuilder<IDocument<TResult>>();
+            this.falseResult.PostStages += Result_PostStages;
+            this.trueResult.PostStages += Result_PostStages;
 
-            public Start(IDocument<TInput> document, IGeneratorContext context, string? name = null) : base(context, name)
+
+            Task Result_PostStages(ImmutableList<IDocument<TResult>> input, OptionToken resultOptions)
             {
-                this.document = document;
+                if (options == resultOptions)
+                    builder.AddRange(input);
+                return Task.CompletedTask;
             }
 
-            protected override Task<StageResult<TInput, string>> DoInternal(string? cache, OptionToken options)
-            {
-                return Task.FromResult(StageResult.CreateStageResult(this.Context, this.document, this.document.Hash != cache, this.document.Id, this.document.Hash, this.document.Hash));
-            }
+            await Task.WhenAll(this.trueP.Invoke(trueDocuments, options),
+                this.falseP.Invoke(falseDocuments, options));
+            this.falseResult.PostStages -= Result_PostStages;
+            this.trueResult.PostStages -= Result_PostStages;
+
+            return builder.ToImmutable();
         }
 
     }
-
-    public class IfCache<TInputCache, TCacheTrue, TCacheFalse> : IHavePreviousCache<TInputCache>
-        where TInputCache : class
-        where TCacheTrue : class
-        where TCacheFalse : class
+    public class IfStage<TInput, TResult, TAditionalData> : StageBase<TInput, TAditionalData, TResult>
     {
-        private IfCache()
-        {
 
-        }
-        public IfCache(TInputCache prviousCache, TCacheTrue? trueCache, TCacheFalse? falseCache, string documentId, string hash)
+        private readonly Func<IDocument<TInput>, bool> predicates;
+        private readonly SubPipline<TInput, TInput> trueIn;
+        private readonly SubPipline<TInput, TInput> falseIn;
+        private readonly SubPipline<TAditionalData, TAditionalData> additionalIn;
+
+        private readonly IStageBaseOutput<TResult> falseResult;
+        private readonly IStageBaseOutput<TResult> trueResult;
+
+        //private readonly StageBase<TInput, TInputCache> input;
+
+        public IfStage(Func<IDocument<TInput>, bool> predicates, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesFalse, IGeneratorContext context, string? name = null) : base(context, name)
         {
-            this.PreviousCache = prviousCache ?? throw new ArgumentNullException(nameof(prviousCache));
-            this.TrueCache = trueCache;
-            this.FalseCache = falseCache;
-            this.DocumentId = documentId ?? throw new ArgumentNullException(nameof(documentId));
-            this.Hash = hash ?? throw new ArgumentNullException(nameof(hash));
+            this.predicates = predicates;
+
+            this.trueIn = SubPipeline.Create<TInput>(this.Context);
+            this.falseIn = SubPipeline.Create<TInput>(this.Context);
+            this.additionalIn = SubPipeline.Create<TAditionalData>(this.Context);
+
+            this.trueResult = piplinesTrue(this.trueIn, this.additionalIn);
+            this.falseResult = piplinesFalse(this.falseIn, this.additionalIn);
         }
 
-        public TInputCache PreviousCache { get; set; }
-        public TCacheTrue? TrueCache { get; set; }
-        public TCacheFalse? FalseCache { get; set; }
-        public string DocumentId { get; set; }
-        public string Hash { get; set; }
+
+        protected override async Task<ImmutableList<IDocument<TResult>>> Work(ImmutableList<IDocument<TInput>> input, ImmutableList<IDocument<TAditionalData>> additionalData, OptionToken options)
+        {
+            options = options.CreateSubToken();
+            var trueDocuments = input.Where(this.predicates).ToImmutableList();
+            var falseDocuments = input.Except(trueDocuments).ToImmutableList();
+
+            var builder = ImmutableList.CreateBuilder<IDocument<TResult>>();
+            this.falseResult.PostStages += Result_PostStages;
+            this.trueResult.PostStages += Result_PostStages;
+
+            Task Result_PostStages(ImmutableList<IDocument<TResult>> input, OptionToken resultOptions)
+            {
+                if (options == resultOptions)
+                    builder.AddRange(input);
+                return Task.CompletedTask;
+            }
+
+            await Task.WhenAll(
+                this.trueIn.Invoke(trueDocuments, options),
+                this.falseIn.Invoke(falseDocuments, options),
+                this.additionalIn.Invoke(additionalData, options)
+                );
+            this.falseResult.PostStages -= Result_PostStages;
+            this.trueResult.PostStages -= Result_PostStages;
+
+            return builder.ToImmutable();
+        }
+
     }
+    public class If2Stage<TInput, TResult, TAditionalData> : StageBase<TInput, TAditionalData, TResult>
+    {
+
+        private readonly Func<IDocument<TInput>, bool> predicates;
+        private readonly SubPipline<TInput, TInput> trueIn;
+        private readonly SubPipline<TInput, TInput> falseIn;
+        private readonly SubPipline<TAditionalData, TAditionalData> additionalIn;
+
+        private readonly IStageBaseOutput<TResult> falseResult;
+        private readonly IStageBaseOutput<TResult> trueResult;
+
+        //private readonly StageBase<TInput, TInputCache> input;
+
+        public If2Stage(Func<IDocument<TInput>, bool> predicates, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesFalse, IGeneratorContext context, string? name = null) : base(context, name)
+        {
+            this.predicates = predicates;
+
+            this.trueIn = SubPipeline.Create<TInput>(this.Context);
+            this.falseIn = SubPipeline.Create<TInput>(this.Context);
+            this.additionalIn = SubPipeline.Create<TAditionalData>(this.Context);
+
+            this.trueResult = piplinesTrue(this.trueIn, this.additionalIn);
+            this.falseResult = piplinesFalse(this.falseIn, this.additionalIn);
+        }
 
 
+        protected override async Task<ImmutableList<IDocument<TResult>>> Work(ImmutableList<IDocument<TInput>> input, ImmutableList<IDocument<TAditionalData>> additionalData, OptionToken options)
+        {
+            options = options.CreateSubToken();
+            var trueDocuments = input.Where(this.predicates).ToImmutableList();
+            var falseDocuments = input.Except(trueDocuments).ToImmutableList();
+
+            var builder = ImmutableList.CreateBuilder<IDocument<TResult>>();
+            this.falseResult.PostStages += Result_PostStages;
+            this.trueResult.PostStages += Result_PostStages;
+
+            Task Result_PostStages(ImmutableList<IDocument<TResult>> input, OptionToken resultOptions)
+            {
+                if (options == resultOptions)
+                    builder.AddRange(input);
+                return Task.CompletedTask;
+            }
+
+            var truetask = this.trueIn.Invoke(trueDocuments, options);
+            var falsetask = this.falseIn.Invoke(falseDocuments, options);
+            var additionaltask = this.additionalIn.Invoke(additionalData, options);
+            await Task.Delay(2000);
+
+            await Task.WhenAll(
+                truetask,
+                falsetask,
+                additionaltask
+                );
+            this.falseResult.PostStages -= Result_PostStages;
+            this.trueResult.PostStages -= Result_PostStages;
+
+            return builder.ToImmutable();
+        }
+
+    }
 }
 
 namespace Stasistium
@@ -153,89 +175,175 @@ namespace Stasistium
     {
 
 
-        public static IfHelper1<TInput, Cache> If<TInput, Cache>(this StageBase<TInput, Cache> stage, Func<IDocument<TInput>, Task<bool>> predicates, string? name = null)
-            where Cache : class
+        public static IfHelper1<TInput> If<TInput>(this IStageBaseOutput<TInput> stage, Func<IDocument<TInput>, bool> predicates, string? name = null)
         {
-            return new IfHelper1<TInput, Cache>(stage, predicates, name);
+            return new IfHelper1<TInput>(stage, predicates, name);
         }
-        public static IfHelper1<TInput, Cache> If<TInput, Cache>(this StageBase<TInput, Cache> stage, Predicate<IDocument<TInput>> predicates, string? name = null)
-            where Cache : class
+
+        public static IfHelper1<TInput, TAditionalData> If<TInput, TAditionalData>(this IStageBaseOutput<TInput> stage, IStageBaseOutput<TAditionalData> additional, Func<IDocument<TInput>, bool> predicates, string? name = null)
         {
-            return new IfHelper1<TInput, Cache>(stage, x => Task.FromResult(predicates(x)), name);
+            return new IfHelper1<TInput, TAditionalData>(stage, additional, predicates, name);
+        }
+        public static IfHelper12<TInput, TAditionalData> If2<TInput, TAditionalData>(this IStageBaseOutput<TInput> stage, IStageBaseOutput<TAditionalData> additional, Func<IDocument<TInput>, bool> predicates, string? name = null)
+        {
+            return new IfHelper12<TInput, TAditionalData>(stage, additional, predicates, name);
         }
 
 
-        public class IfHelper1<TInput, Cache>
-            where Cache : class
+        public class IfHelper12<TInput, TAditionalData>
+
         {
             private readonly string? name;
-            private StageBase<TInput, Cache> stage;
-            private Func<IDocument<TInput>, Task<bool>> predicates;
+            private readonly IStageBaseOutput<TInput> stage;
+            private readonly IStageBaseOutput<TAditionalData> additional;
+            private readonly Func<IDocument<TInput>, bool> predicates;
 
-            public IfHelper1(StageBase<TInput, Cache> stage, Func<IDocument<TInput>, Task<bool>> predicates, string? name)
+            public IfHelper12(IStageBaseOutput<TInput> stage, IStageBaseOutput<TAditionalData> additional, Func<IDocument<TInput>, bool> predicates, string? name)
+            {
+                this.stage = stage;
+                this.additional = additional;
+                this.predicates = predicates;
+                this.name = name;
+            }
+
+            public IfHelper22<TInput, TAditionalData, TResult> Then<TResult>(Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue)
+            {
+                return new IfHelper22<TInput, TAditionalData, TResult>(this.stage, this.additional, this.predicates, piplinesTrue, this.name);
+            }
+
+        }
+        public class IfHelper22<TInput, TAditionalData, TResult>
+        {
+            private readonly string? name;
+            private readonly IStageBaseOutput<TInput> stage;
+            private readonly IStageBaseOutput<TAditionalData> additional;
+            private readonly Func<IDocument<TInput>, bool> predicates;
+            private readonly Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue;
+
+            public IfHelper22(IStageBaseOutput<TInput> stage, IStageBaseOutput<TAditionalData> additional, Func<IDocument<TInput>, bool> predicates, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue, string? name)
+            {
+                this.stage = stage;
+                this.additional = additional;
+                this.predicates = predicates;
+                this.piplinesTrue = piplinesTrue;
+                this.name = name;
+            }
+            public IStageBaseOutput<TResult> Else(Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesFalse)
+            {
+                return If2StageExtension.If2(this.stage, this.additional, this.predicates, this.piplinesTrue, piplinesFalse, this.name);
+            }
+        }
+        public class IfHelper1<TInput, TAditionalData>
+
+        {
+            private readonly string? name;
+            private readonly IStageBaseOutput<TInput> stage;
+            private readonly IStageBaseOutput<TAditionalData> additional;
+            private readonly Func<IDocument<TInput>, bool> predicates;
+
+            public IfHelper1(IStageBaseOutput<TInput> stage, IStageBaseOutput<TAditionalData> additional, Func<IDocument<TInput>, bool> predicates, string? name)
+            {
+                this.stage = stage;
+                this.additional = additional;
+                this.predicates = predicates;
+                this.name = name;
+            }
+
+            public IfHelper2<TInput, TAditionalData, TResult> Then<TResult>(Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue)
+            {
+                return new IfHelper2<TInput, TAditionalData, TResult>(this.stage, this.additional, this.predicates, piplinesTrue, this.name);
+            }
+
+        }
+        public class IfHelper2<TInput, TAditionalData, TResult>
+        {
+            private readonly string? name;
+            private readonly IStageBaseOutput<TInput> stage;
+            private readonly IStageBaseOutput<TAditionalData> additional;
+            private readonly Func<IDocument<TInput>, bool> predicates;
+            private readonly Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue;
+
+            public IfHelper2(IStageBaseOutput<TInput> stage, IStageBaseOutput<TAditionalData> additional, Func<IDocument<TInput>, bool> predicates, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesTrue, string? name)
+            {
+                this.stage = stage;
+                this.additional = additional;
+                this.predicates = predicates;
+                this.piplinesTrue = piplinesTrue;
+                this.name = name;
+            }
+            public IStageBaseOutput<TResult> Else(Func<IStageBaseOutput<TInput>, IStageBaseOutput<TAditionalData>, IStageBaseOutput<TResult>> piplinesFalse)
+            {
+                return IfStageExtension.If(this.stage, this.additional, this.predicates, this.piplinesTrue, piplinesFalse, this.name);
+            }
+        }
+        public class IfHelper1<TInput>
+
+        {
+            private readonly string? name;
+            private readonly IStageBaseOutput<TInput> stage;
+            private readonly Func<IDocument<TInput>, bool> predicates;
+
+            public IfHelper1(IStageBaseOutput<TInput> stage, Func<IDocument<TInput>, bool> predicates, string? name)
             {
                 this.stage = stage;
                 this.predicates = predicates;
                 this.name = name;
             }
 
-            public IfHelper2<TInput, Cache, TCacheTrue, TResult> Then<TCacheTrue, TResult>(Func<StageBase<TInput, string>, StageBase<TResult, TCacheTrue>> piplinesTrue)
-                where TCacheTrue : class
+            public IfHelper2<TInput, TResult> Then<TResult>(Func<IStageBaseOutput<TInput>, IStageBaseOutput<TResult>> piplinesTrue)
+
             {
-                return new IfHelper2<TInput, Cache, TCacheTrue, TResult>(this.stage, this.predicates, piplinesTrue, this.name);
+                return new IfHelper2<TInput, TResult>(this.stage, this.predicates, piplinesTrue, this.name);
             }
 
         }
-        public class IfHelper2<TInput, Cache, TCacheTrue, TResult>
-            where Cache : class
-            where TCacheTrue : class
+        public class IfHelper2<TInput, TResult>
         {
             private readonly string? name;
-            private StageBase<TInput, Cache> stage;
-            private Func<IDocument<TInput>, Task<bool>> predicates;
-            private Func<StageBase<TInput, string>, StageBase<TResult, TCacheTrue>> piplinesTrue;
+            private readonly IStageBaseOutput<TInput> stage;
+            private readonly Func<IDocument<TInput>, bool> predicates;
+            private readonly Func<IStageBaseOutput<TInput>, IStageBaseOutput<TResult>> piplinesTrue;
 
-            public IfHelper2(StageBase<TInput, Cache> stage, Func<IDocument<TInput>, Task<bool>> predicates, Func<StageBase<TInput, string>, StageBase<TResult, TCacheTrue>> piplinesTrue, string? name)
+            public IfHelper2(IStageBaseOutput<TInput> stage, Func<IDocument<TInput>, bool> predicates, Func<IStageBaseOutput<TInput>, IStageBaseOutput<TResult>> piplinesTrue, string? name)
             {
                 this.stage = stage;
                 this.predicates = predicates;
                 this.piplinesTrue = piplinesTrue;
                 this.name = name;
             }
-            public IfStage<TInput, Cache, TCacheTrue, TCacheFalse, TResult> Else<TCacheFalse>(Func<StageBase<TInput, string>, StageBase<TResult, TCacheFalse>> piplinesFalse)
-                where TCacheFalse : class
+            public IStageBaseOutput<TResult> Else(Func<IStageBaseOutput<TInput>, IStageBaseOutput<TResult>> piplinesFalse)
             {
-                return new IfStage<TInput, Cache, TCacheTrue, TCacheFalse, TResult>(this.stage, this.predicates, this.piplinesTrue, piplinesFalse, this.stage.Context, this.name);
+                return IfStageExtension.If(this.stage, this.predicates, this.piplinesTrue, piplinesFalse, this.name);
             }
         }
 
-        public static MultiStageBase<TIn, string, ConcatStageManyCache<WhereStageCache<TInCache>, TSecondOutCache>> Branch<TIn, TInItemCache, TInCache, TSecondOutItemCache, TSecondOutCache>(this MultiStageBase<TIn, TInItemCache, TInCache> input, Predicate<IDocument<TIn>> predicate, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TIn, TSecondOutItemCache, TSecondOutCache>> branch)
-            where TInItemCache : class
-            where TInCache : class
-            where TSecondOutItemCache : class
-            where TSecondOutCache : class
-        {
+        //public static MultiStageBase<TIn, string, ConcatStageManyCache<WhereStageCache<TInCache>, TSecondOutCache>> Branch<TIn, TInItemCache, TInCache, TSecondOutItemCache, TSecondOutCache>(this MultiStageBase<TIn, TInItemCache, TInCache> input, Predicate<IDocument<TIn>> predicate, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TIn, TSecondOutItemCache, TSecondOutCache>> branch)
+        //    where TInItemCache : class
+        //    where TInCache : class
+        //    where TSecondOutItemCache : class
+        //    where TSecondOutCache : class
+        //{
 
-            var truePath = branch(input.Where(x => predicate(x)));
-            var falsePath = input.Where(x => !predicate(x));
+        //    var truePath = branch(input.Where(x => predicate(x)));
+        //    var falsePath = input.Where(x => !predicate(x));
 
-            return falsePath.Concat(truePath);
-        }
+        //    return falsePath.Concat(truePath);
+        //}
 
-        public static MultiStageBase<TOut, string, ConcatStageManyCache<TThirdOutCache, TSecondOutCache>> Branch<TIn, TOut, TInItemCache, TInCache, TSecondOutItemCache, TSecondOutCache, TThirdOutItemCache, TThirdOutCache>(this MultiStageBase<TIn, TInItemCache, TInCache> input, Predicate<IDocument<TIn>> predicate, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TOut, TSecondOutItemCache, TSecondOutCache>> branch, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TOut, TThirdOutItemCache, TThirdOutCache>> elseBranch)
-            where TThirdOutItemCache : class
-            where TThirdOutCache : class
-            where TInItemCache : class
-            where TInCache : class
-            where TSecondOutItemCache : class
-            where TSecondOutCache : class
-        {
+        //public static MultiStageBase<TOut, string, ConcatStageManyCache<TThirdOutCache, TSecondOutCache>> Branch<TIn, TOut, TInItemCache, TInCache, TSecondOutItemCache, TSecondOutCache, TThirdOutItemCache, TThirdOutCache>(this MultiStageBase<TIn, TInItemCache, TInCache> input, Predicate<IDocument<TIn>> predicate, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TOut, TSecondOutItemCache, TSecondOutCache>> branch, Func<MultiStageBase<TIn, TInItemCache, WhereStageCache<TInCache>>, MultiStageBase<TOut, TThirdOutItemCache, TThirdOutCache>> elseBranch)
+        //    where TThirdOutItemCache : class
+        //    where TThirdOutCache : class
+        //    where TInItemCache : class
+        //    where TInCache : class
+        //    where TSecondOutItemCache : class
+        //    where TSecondOutCache : class
+        //{
 
-            var truePath = branch(input.Where(x => predicate(x)));
-            var falsePath = elseBranch(input.Where(x => !predicate(x)));
+        //    var truePath = branch(input.Where(x => predicate(x)));
+        //    var falsePath = elseBranch(input.Where(x => !predicate(x)));
 
-            return falsePath.Concat(truePath);
-        }
+        //    return falsePath.Concat(truePath);
+        //}
 
 
     }
