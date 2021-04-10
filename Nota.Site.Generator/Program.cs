@@ -1097,27 +1097,38 @@ namespace Nota.Site.Generator
             LibGit2Sharp.Repository repo;
             if (Directory.Exists(workdirPath))
             {
-                repo = new LibGit2Sharp.Repository(workdirPath);
+                try
+                {
+                    repo = new LibGit2Sharp.Repository(workdirPath);
 
-                var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
+                    var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
 
-                //if (status.IsDirty)
-                //{
-                //    var currentCommit = repo.Head.Tip;
-                //    repo.Reset(LibGit2Sharp.ResetMode.Hard, currentCommit);
+                    //if (status.IsDirty)
+                    //{
+                    //    var currentCommit = repo.Head.Tip;
+                    //    repo.Reset(LibGit2Sharp.ResetMode.Hard, currentCommit);
 
-                //}
+                    //}
 
-                var remote = repo.Network.Remotes["origin"];
-                var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
-                LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
+                    var remote = repo.Network.Remotes["origin"];
+                    var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                    LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
 
 
-                var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
-                repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
+                    var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
+                    repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
 
-                //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
+                    //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
 
+                }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine($"Failed to use old Repo\n{e}");
+
+                    Directory.Delete(workdirPath, true);
+                    repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
+
+                }
             }
             else
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
@@ -1173,7 +1184,7 @@ namespace Nota.Site.Generator
                 // Commit to the repository
                 var commit = repo.Commit("Updated Build", author, committer, new LibGit2Sharp.CommitOptions() { });
                 //repo.Branches.Add()
-                    ;
+                ;
                 //repo.Network.Push(repo.Network.Remotes["origin"], repo.Head.CanonicalName);
                 repo.Network.Push(repo.Head, new LibGit2Sharp.PushOptions() { });
             }
