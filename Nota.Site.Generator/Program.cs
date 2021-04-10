@@ -1115,8 +1115,6 @@ namespace Nota.Site.Generator
                     LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
 
 
-                    var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
-                    repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
 
                     //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
 
@@ -1132,6 +1130,11 @@ namespace Nota.Site.Generator
             }
             else
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
+
+
+            var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
+            repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
+
 
             if (Directory.Exists(output))
                 Directory.Delete(output, true);
