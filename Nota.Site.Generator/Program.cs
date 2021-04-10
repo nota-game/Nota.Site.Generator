@@ -1131,13 +1131,20 @@ namespace Nota.Site.Generator
             else
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
 
+            var localMaster = repo.Branches[config.WebsiteRepo?.PrimaryBranchName ?? "master"];
             var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
-            var localMaster = repo.CreateBranch(config.WebsiteRepo?.PrimaryBranchName ?? "master", originMaster.Tip);
-            repo.Branches.Update(localMaster, b => b.TrackedBranch = originMaster.CanonicalName);
+            if (localMaster is null)
+            {
+
+                localMaster = repo.CreateBranch(config.WebsiteRepo?.PrimaryBranchName ?? "master", originMaster.Tip);
+                repo.Branches.Update(localMaster, b => b.TrackedBranch = originMaster.CanonicalName);
+            }
             LibGit2Sharp.Commands.Checkout(repo, localMaster, new LibGit2Sharp.CheckoutOptions()
             {
                 CheckoutModifiers = CheckoutModifiers.Force
             });
+
+            repo.Reset(ResetMode.Hard, originMaster.Tip);
 
 
             if (Directory.Exists(output))
