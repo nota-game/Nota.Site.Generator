@@ -22,16 +22,18 @@ namespace Nota.Site.Generator
         public IEnumerable<BookVersion> Versions => this.enumerable;
     }
 
+ 
+
 
     public class Config
     {
-        public string? ContentRepo { get; set; }
-        public string? SchemaRepo { get; set; }
+        public Stasistium.Stages.GitRepo? ContentRepo { get; set; }
+        public Stasistium.Stages.GitRepo? SchemaRepo { get; set; }
         public string? Layouts { get; set; }
         public string? StaticContent { get; set; }
         public string? Host { get; set; }
 
-        public string? WebsiteRepo { get; set; }
+        public Stasistium.Stages.GitRepo? WebsiteRepo { get; set; }
     }
 
     internal class GitRefMetadata

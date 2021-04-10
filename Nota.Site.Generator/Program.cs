@@ -177,24 +177,24 @@ namespace Nota.Site.Generator
 
 
                 var contentRepo = configFile
-                    .Select(x => x.With(x.Value.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Value.ContentRepo))
+                    .Select(x => x.With(x.Value?.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.ContentRepo)))
                     .GitClone("Git for Content")
                     //.Where(x => x.Id == "master") // for debuging 
                     //.Where(x => true) // for debuging 
                     ;
 
                 var schemaRepo = configFile
-                    .Select(x => x.With(x.Value.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Value.SchemaRepo)
+                    .Select(x => x.With(x.Value?.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.SchemaRepo))
                         .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                     .GitClone("Git for Schema");
 
                 var layoutProvider = configFile
-                    .Select(x => x.With(x.Value.Layouts ?? "layout", x.Value.Layouts ?? "layout"), "Transform LayoutProvider from Config")
+                    .Select(x => x.With(x.Value?.Layouts ?? "layout", x.Value?.Layouts ?? "layout"), "Transform LayoutProvider from Config")
                     .FileSystem("Layout Filesystem")
                     .FileProvider("Layout", "Layout FIle Provider");
 
                 var staticFilesInput = configFile
-                    .Select(x => x.With(x.Value.StaticContent ?? "static", x.Value.StaticContent ?? "static"), "Static FIle from Config")
+                    .Select(x => x.With(x.Value?.StaticContent ?? "static", x.Value?.StaticContent ?? "static"), "Static FIle from Config")
                     .FileSystem("static Filesystem");
 
 
@@ -544,7 +544,7 @@ namespace Nota.Site.Generator
             }
 
 
-            PostGit(author, committer, repo, workdirPath, cache, output);
+            PostGit(author, committer, repo, config.ContentRepo?.PrimaryBranchName, workdirPath, cache, output);
             s.Stop();
             Console.WriteLine($"Finishing took {s.Elapsed}");
         }
@@ -1113,14 +1113,14 @@ namespace Nota.Site.Generator
                 LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
 
 
-                var originMaster = repo.Branches["origin/master"];
+                var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
                 repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
 
                 //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
 
             }
             else
-                repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
+                repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
 
             if (Directory.Exists(output))
                 Directory.Delete(output, true);
@@ -1145,7 +1145,7 @@ namespace Nota.Site.Generator
             return repo;
         }
 
-        private static void PostGit(LibGit2Sharp.Signature author, LibGit2Sharp.Signature committer, LibGit2Sharp.Repository repo, string workdirPath, string cache, string output)
+        private static void PostGit(LibGit2Sharp.Signature author, LibGit2Sharp.Signature committer, LibGit2Sharp.Repository repo, string branch, string workdirPath, string cache, string output)
         {
             var outputInfo = new DirectoryInfo(output);
             foreach (var path in outputInfo.GetDirectories())
@@ -1153,7 +1153,7 @@ namespace Nota.Site.Generator
             foreach (var path in outputInfo.GetFiles())
                 path.MoveTo(Path.Combine(workdirPath, path.Name));
 
-            new DirectoryInfo(cache).MoveTo(Path.Combine(workdirPath, cache));
+            //new DirectoryInfo(cache).MoveTo(Path.Combine(workdirPath, cache));
 
 
             var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
@@ -1172,8 +1172,10 @@ namespace Nota.Site.Generator
 
                 // Commit to the repository
                 var commit = repo.Commit("Updated Build", author, committer, new LibGit2Sharp.CommitOptions() { });
-
-                repo.Network.Push(repo.Branches["master"], new LibGit2Sharp.PushOptions() { });
+                //repo.Branches.Add()
+                    ;
+                //repo.Network.Push(repo.Network.Remotes["origin"], repo.Head.CanonicalName);
+                repo.Network.Push(repo.Head, new LibGit2Sharp.PushOptions() { });
             }
         }
 
