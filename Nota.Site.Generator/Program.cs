@@ -21,7 +21,7 @@ using AngleSharp.Html.Parser;
 using AngleSharp.Dom;
 
 using IDocument = Stasistium.Documents.IDocument;
-
+using LibGit2Sharp;
 
 namespace Nota.Site.Generator
 {
@@ -565,7 +565,7 @@ namespace Nota.Site.Generator
 
 
 
-                var angleSharpConfig = Configuration.Default;
+                var angleSharpConfig = AngleSharp.Configuration.Default;
                 var angleSharpContext = BrowsingContext.New(angleSharpConfig);
                 var parser = angleSharpContext.GetService<IHtmlParser>();
                 var source = text;
@@ -1131,9 +1131,13 @@ namespace Nota.Site.Generator
             else
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
 
-
             var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
-            repo.Reset(LibGit2Sharp.ResetMode.Hard, originMaster.Tip);
+            var localMaster = repo.CreateBranch(config.WebsiteRepo?.PrimaryBranchName ?? "master", originMaster.Tip);
+            repo.Branches.Update(localMaster, b => b.TrackedBranch = originMaster.CanonicalName);
+            LibGit2Sharp.Commands.Checkout(repo, localMaster, new LibGit2Sharp.CheckoutOptions()
+            {
+                CheckoutModifiers = CheckoutModifiers.Force
+            });
 
 
             if (Directory.Exists(output))
