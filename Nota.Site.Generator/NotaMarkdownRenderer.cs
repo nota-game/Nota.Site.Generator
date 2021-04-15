@@ -10,14 +10,33 @@ namespace Nota.Site.Generator
     internal class NotaMarkdownRenderer : MarkdownRenderer
     {
 
+        public string EditUrl { get; }
+
+        public NotaMarkdownRenderer(string editUrl)
+        {
+            this.EditUrl = editUrl;
+        }
+
         protected override void Render(StringBuilder builder, MarkdownBlock block)
         {
             switch (block)
             {
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
-                    builder.Append($"<div class=\"edit-box\"><span><a href=\"");
-                    builder.Append(sourceReferenceBlock.OriginalDocument.Id);
-                    builder.Append("\" >Bearbeiten</a>");
+                    builder.Append($"<div class=\"edit-box\">");
+                    var reffData = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitRefMetadata>();
+                    if (this.EditUrl is not null && reffData is not null)
+                    {
+
+                        builder.Append($"<span><a href=\"");
+                        builder.Append(this.EditUrl);
+                        if (!this.EditUrl.EndsWith("/"))
+                            builder.Append('/');
+                        
+                        builder.Append(this.EditUrl);
+                        builder.Append(reffData.Name);
+                        builder.Append(sourceReferenceBlock.OriginalDocument.Id);
+                        builder.Append("\" >Bearbeiten</a>");
+                    }
                     var commitDetails = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitMetadata>();
                     if (commitDetails != null)
                     {

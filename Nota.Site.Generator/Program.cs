@@ -133,6 +133,17 @@ namespace Nota.Site.Generator
                 config = await taskCompletion.Task;
             }
 
+            var editUrl = config.ContentRepo?.Url;
+            if (editUrl is not null)
+            {
+                if (!editUrl.StartsWith("https://github.com/"))
+                    editUrl = null;
+                else
+                {
+                    editUrl = editUrl[..editUrl.LastIndexOf('/')] + "edit/";
+                }
+            }
+
             // Create the committer's signature and commit
             var author = new LibGit2Sharp.Signature("NotaSiteGenerator", "@NotaSiteGenerator", DateTime.Now);
             var committer = author;
@@ -247,7 +258,7 @@ namespace Nota.Site.Generator
 
                 var comninedFiles = contentRepo
                     .GroupBy(x => x.Value.FrindlyName,
-                    (key, input) => DocumentsForBranch(input), "Select Content Files from Ref")
+                    (key, input) => DocumentsForBranch(input, editUrl), "Select Content Files from Ref")
                        .EmbededXmp()
 
                     ;
@@ -655,7 +666,7 @@ namespace Nota.Site.Generator
             return input;
         }
 
-        private static Stasistium.Stages.IStageBaseOutput<Stream> DocumentsForBranch(Stasistium.Stages.IStageBaseOutput<GitRefStage> input)
+        private static Stasistium.Stages.IStageBaseOutput<Stream> DocumentsForBranch(Stasistium.Stages.IStageBaseOutput<GitRefStage> input, string editUrl)
         {
             Stasistium.Stages.IStageBaseOutput<SiteMetadata> siteData;
             Stasistium.Stages.IStageBaseOutput<Stream> grouped;
@@ -730,7 +741,7 @@ namespace Nota.Site.Generator
                      return x.Id[startIndex..endIndex];
                  }
 
-            , GetBooksDocuments, "Group by for files");
+            , (key, x, dataFile) => GetBooksDocuments(key, x, dataFile, editUrl), "Group by for files");
 
 
             var files = grouped
@@ -745,7 +756,7 @@ namespace Nota.Site.Generator
         }
 
         //private static Stasistium.Stages.IStageBaseOutput<Stream> GetBooksDocuments(Stasistium.Stages.IStageBaseOutput<Stream> inputOriginal, string key)
-        private static Stasistium.Stages.IStageBaseOutput<Stream> GetBooksDocuments(Stasistium.Stages.IStageBaseOutput<string> key, Stasistium.Stages.IStageBaseOutput<Stream> inputOriginal, Stasistium.Stages.IStageBaseOutput<Stream> dataFile)
+        private static Stasistium.Stages.IStageBaseOutput<Stream> GetBooksDocuments(Stasistium.Stages.IStageBaseOutput<string> key, Stasistium.Stages.IStageBaseOutput<Stream> inputOriginal, Stasistium.Stages.IStageBaseOutput<Stream> dataFile, string editUrl)
         {
             var context = inputOriginal.Context;
 
@@ -853,8 +864,10 @@ namespace Nota.Site.Generator
             //    } );
             //})
 
+
+
             var markdownRendered = preparedForRender
-                .ToHtml(new NotaMarkdownRenderer(), "Markdown To HTML")
+                .ToHtml(new NotaMarkdownRenderer(editUrl), "Markdown To HTML")
                 .FormatXml()
                 .ToStream()
                 .Silblings();

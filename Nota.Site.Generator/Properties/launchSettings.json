@@ -2,7 +2,8 @@
   "profiles": {
     "Nota.Site.Generator": {
       "commandName": "Project",
-      "workingDirectory": "C:\\Users\\patri\\source\\repos\\nota-game\\test build\\main"
+      "commandLineArgs": "--serve",
+      "workingDirectory": "C:\\Users\\patri\\source\\repos\\nota-game\\Nota.Site.Generator.Test"
     }
   }
 }
