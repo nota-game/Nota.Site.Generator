@@ -258,7 +258,7 @@ namespace Nota.Site.Generator
 
                 var comninedFiles = contentRepo
                     .GroupBy(x => x.Value.FrindlyName,
-                    (key, input) => DocumentsForBranch(input, editUrl), "Select Content Files from Ref")
+                    (key, input) => DocumentsForBranch(input, key, editUrl), "Select Content Files from Ref")
                        .EmbededXmp()
 
                     ;
@@ -665,14 +665,14 @@ namespace Nota.Site.Generator
 
             return input;
         }
-
-        private static Stasistium.Stages.IStageBaseOutput<Stream> DocumentsForBranch(Stasistium.Stages.IStageBaseOutput<GitRefStage> input, string editUrl)
+        private static Stasistium.Stages.IStageBaseOutput<Stream> DocumentsForBranch(Stasistium.Stages.IStageBaseOutput<GitRefStage> input, Stasistium.Stages.IStageBaseOutput<string> key, string editUrl)
         {
             Stasistium.Stages.IStageBaseOutput<SiteMetadata> siteData;
             Stasistium.Stages.IStageBaseOutput<Stream> grouped;
             //NewMethod(input, context, out siteData, out grouped);
             var context = input.Context;
             var contentFiles = input
+                .CrossJoin(key, (x, key) => x.With(x.Metadata.Add(new Book(key.Value))))
            .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
            .Files(addGitMetadata: true, name: "Read Files from Git (Content)")
            .Sidecar<BookMetadata>(".metadata")
@@ -1218,5 +1218,7 @@ namespace Nota.Site.Generator
         }
 
     }
+
+    public record Book(string name);
 
 }

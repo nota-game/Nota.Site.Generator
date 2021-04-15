@@ -24,7 +24,8 @@ namespace Nota.Site.Generator
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
                     builder.Append($"<div class=\"edit-box\">");
                     var reffData = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitRefMetadata>();
-                    if (this.EditUrl is not null && reffData is not null)
+                    var book = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<Book>();
+                    if (this.EditUrl is not null && reffData is not null && book is not null)
                     {
 
                         builder.Append($"<span><a href=\"");
@@ -33,7 +34,10 @@ namespace Nota.Site.Generator
                             builder.Append('/');
 
                         builder.Append(reffData.Name);
+                        builder.Append("/books/");
+                        builder.Append(book.name);
                         builder.Append('/');
+
                         builder.Append(sourceReferenceBlock.OriginalDocument.Id);
                         builder.Append("\" target=\"_blank\" >Bearbeiten</a>");
                     }
