@@ -140,7 +140,7 @@ namespace Nota.Site.Generator
                     editUrl = null;
                 else
                 {
-                    editUrl = editUrl[..^".git".Length] + "edit/";
+                    editUrl = editUrl[..^".git".Length] + "/edit/";
                 }
             }
 
