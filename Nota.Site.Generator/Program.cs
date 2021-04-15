@@ -136,11 +136,11 @@ namespace Nota.Site.Generator
             var editUrl = config.ContentRepo?.Url;
             if (editUrl is not null)
             {
-                if (!editUrl.StartsWith("https://github.com/"))
+                if (!editUrl.StartsWith("https://github.com/") || !editUrl.EndsWith(".git"))
                     editUrl = null;
                 else
                 {
-                    editUrl = editUrl[..(editUrl.LastIndexOf('/') + 1)] + "edit/";
+                    editUrl = editUrl[..^".git".Length] + "edit/";
                 }
             }
 
