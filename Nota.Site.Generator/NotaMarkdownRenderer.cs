@@ -35,7 +35,7 @@ namespace Nota.Site.Generator
                         builder.Append(reffData.Name);
                         builder.Append('/');
                         builder.Append(sourceReferenceBlock.OriginalDocument.Id);
-                        builder.Append("\" >Bearbeiten</a>");
+                        builder.Append("\" target=\"_blank\" >Bearbeiten</a>");
                     }
                     var commitDetails = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitMetadata>();
                     if (commitDetails != null)
