@@ -35,7 +35,7 @@ namespace Nota.Site.Generator
 
                         builder.Append(reffData.Name);
                         builder.Append("/books/");
-                        builder.Append(book.name);
+                        builder.Append(book.Name);
                         builder.Append('/');
 
                         builder.Append(sourceReferenceBlock.OriginalDocument.Id);
