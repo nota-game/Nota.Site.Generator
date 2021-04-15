@@ -672,7 +672,6 @@ namespace Nota.Site.Generator
             //NewMethod(input, context, out siteData, out grouped);
             var context = input.Context;
             var contentFiles = input
-                .CrossJoin(key, (x, key) => x.With(x.Metadata.Add(new Book(key.Value))))
            .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
            .Files(addGitMetadata: true, name: "Read Files from Git (Content)")
            .Sidecar<BookMetadata>(".metadata")
@@ -763,7 +762,7 @@ namespace Nota.Site.Generator
 
 
 
-            var input = inputOriginal.CrossJoin(key, (x, key) => x.WithId(x.Id[$"books/{key.Value}/".Length..]), "input chnage cross join");
+            var input = inputOriginal.CrossJoin(key, (x, key) => x.WithId(x.Id[$"books/{key.Value}/".Length..]).With(x.Metadata.Add(new Book(key.Value))), "input chnage cross join");
 
             var bookData = input.Where(x => x.Id == $".bookdata")
                 .Single()
@@ -1219,6 +1218,6 @@ namespace Nota.Site.Generator
 
     }
 
-    public record Book(string name);
+    public record Book(string Name);
 
 }
