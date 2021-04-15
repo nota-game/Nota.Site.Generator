@@ -31,9 +31,9 @@ namespace Nota.Site.Generator
                         builder.Append(this.EditUrl);
                         if (!this.EditUrl.EndsWith("/"))
                             builder.Append('/');
-                        
-                        builder.Append(this.EditUrl);
+
                         builder.Append(reffData.Name);
+                        builder.Append('/');
                         builder.Append(sourceReferenceBlock.OriginalDocument.Id);
                         builder.Append("\" >Bearbeiten</a>");
                     }

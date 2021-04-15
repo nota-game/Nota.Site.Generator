@@ -140,7 +140,7 @@ namespace Nota.Site.Generator
                     editUrl = null;
                 else
                 {
-                    editUrl = editUrl[..editUrl.LastIndexOf('/')] + "edit/";
+                    editUrl = editUrl[..(editUrl.LastIndexOf('/') + 1)] + "edit/";
                 }
             }
 
