@@ -45,6 +45,7 @@ namespace Nota.Site.Generator
 
     public class SilblingMetadata
     {
+        private SilblingMetadata() { }
         public SilblingMetadata(string? previous, string? next)
         {
             this.Previous = previous;

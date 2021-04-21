@@ -22,7 +22,7 @@ namespace Nota.Site.Generator
         public IEnumerable<BookVersion> Versions => this.enumerable;
     }
 
- 
+
 
 
     public class Config
@@ -38,6 +38,12 @@ namespace Nota.Site.Generator
 
     internal class GitRefMetadata
     {
+
+        private GitRefMetadata()
+        {
+
+        }
+
         public GitRefMetadata(GitRefStage value)
         {
             this.Name = value.FrindlyName;
@@ -50,8 +56,8 @@ namespace Nota.Site.Generator
             this.Type = type;
         }
 
-        public string Name { get; }
-        public GitRefType Type { get; }
+        public string Name { get; private set; }
+        public GitRefType Type { get; private set; }
 
         public BookVersion CalculatedVersion
         {

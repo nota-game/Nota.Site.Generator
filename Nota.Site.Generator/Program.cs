@@ -257,9 +257,11 @@ namespace Nota.Site.Generator
 
 
                 var comninedFiles = contentRepo
-                    .GroupBy(x => x.Value.FrindlyName,
-                    (key, input) => DocumentsForBranch(input, key, editUrl), "Select Content Files from Ref")
-                       .EmbededXmp()
+                    .CacheDocument("branchedDocuments", c => c
+                     .GroupBy(x => x.Value.FrindlyName,
+                     (key, input) => DocumentsForBranch(input, key, editUrl), "Select Content Files from Ref")
+                        .EmbededXmp()
+                    )
 
                     ;
 
@@ -773,7 +775,9 @@ namespace Nota.Site.Generator
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                 .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF")
                         .Then((x, _) => x
+                        .CacheDocument("excelCache", y => y
                         .ExcelToMarkdownText(true)
+                        )
                         .ToStream()
                 ).Else((z, dataFile) =>
                     //z.Where(x => System.IO.Path.GetExtension(x.Id) != ".xslt")
@@ -1190,7 +1194,9 @@ namespace Nota.Site.Generator
             foreach (var path in outputInfo.GetFiles())
                 path.MoveTo(Path.Combine(workdirPath, path.Name));
 
-            //new DirectoryInfo(cache).MoveTo(Path.Combine(workdirPath, cache));
+            var cacheDirectory = new DirectoryInfo(cache);
+            if (cacheDirectory.Exists)
+                cacheDirectory.MoveTo(Path.Combine(workdirPath, cache));
 
 
             var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
@@ -1218,6 +1224,19 @@ namespace Nota.Site.Generator
 
     }
 
-    public record Book(string Name);
+    public class Book
+    {
+        private Book()
+        {
+
+        }
+
+        public Book(string name)
+        {
+            this.Name = name;
+        }
+
+        public string Name { get; private set; }
+    }
 
 }
