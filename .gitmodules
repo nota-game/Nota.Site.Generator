@@ -1,0 +1,6 @@
+[submodule "dependencys/PDFsharp"]
+	path = dependencys/PDFsharp
+	url = https://github.com/LokiMidgard/PDFsharp
+[submodule "dependencys/MigraDoc"]
+	path = dependencys/MigraDoc
+	url = https://github.com/LokiMidgard/MigraDoc
