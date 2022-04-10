@@ -68,7 +68,7 @@ namespace Nota.Site.Generator.Stages
             var problems = idToAfter
                 .GroupBy(x => x.Value)
                 .Where(x => x.Count() > 1)
-                .Select(x => $"The documents { string.Join(", ", x.Select(y => y.Key)) } all follow {x.Key}. Only one is allowed");
+                .Select(x => $"The documents {string.Join(", ", x.Select(y => y.Key))} all follow {x.Key}. Only one is allowed");
 
             var problemString = string.Join("\n", problems);
 
@@ -83,8 +83,11 @@ namespace Nota.Site.Generator.Stages
             {
                 // check for circles or gaps
                 if (startValues.Length == 0)
+                {
                     // we have a circle.
-                    throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency.");
+                    var ordering = string.Join("\n", idToAfter.Select(x => $"{x.Key} => {x.Value}"));
+                    throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency\n." + ordering);
+                }
                 if (startValues.Length > 1)
                     throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
 
