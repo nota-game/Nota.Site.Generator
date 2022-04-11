@@ -9,9 +9,9 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/Nota.Site.Generator/bin/Debug/netcoreapp3.1/Nota.Site.Generator.dll",
-            "args": ["--serve"],
-            "cwd": "C:/Users/patri/source/repos/nota-game/Nota.Site.Generator.Test",
+            "program": "${workspaceFolder}/Nota.Site.Generator/bin/Debug/net6.0/Nota.Site.Generator.dll",
+            "args": ["--configuration",".\\test\\config.local.json"],
+            "cwd": "C:/Users/patri/source/repos/nota-game/nota-game.github.io",
             "console": "externalTerminal",
             "stopAtEntry": false,
             
