@@ -35,77 +35,98 @@ namespace Nota.Site.Generator.Stages
             var list = ImmutableList<IDocument<MarkdownDocument>>.Empty.ToBuilder();
 
             var stateLookup = performed.ToDictionary(x => x.Id);
-            var idToAfter = new Dictionary<string, string>();
+            var idToAfter = new Dictionary<string, string?>();
+
 
             var documentsWithChapters = new HashSet<string>();
 
-            foreach (var item in performed)
-            {
+            foreach (var item in performed) {
                 var resolver = new RelativePathResolver(item.Id, input.Select(x => x.Id));
                 var itemTask = item;
                 var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
-                if (order?.After != null)
-                {
+                if (order?.After != null) {
                     var resolved = resolver[order.After];
                     if (resolved is not null)
                         idToAfter[itemTask.Id] = resolved;
+                } else {
+                    idToAfter[itemTask.Id] = null;
                 }
 
                 if (this.ContainsChapters(itemTask.Value.Blocks))
                     documentsWithChapters.Add(itemTask.Id);
             }
+            var lookup = idToAfter.ToLookup(x => x.Value, x => x.Key);
 
 
             // check for wrong Pathes
-            var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x => x.Key);
-            if (wrongPathes.Any())
-            {
-                throw this.Context.Exception($"The after pathes of following documents could not be resolved: {string.Join(", ", wrongPathes)}");
-            }
+            // var wrongPathes = idToAfter.Where(x => x.Value is null).Select(x => x.Key);
+            // if (wrongPathes.Any()) {
+            //     throw this.Context.Exception($"The after pathes of following documents could not be resolved: {string.Join(", ", wrongPathes)}");
+            // }
 
             // check for double entrys
 
-            var problems = idToAfter
-                .GroupBy(x => x.Value)
-                .Where(x => x.Count() > 1)
-                .Select(x => $"The documents {string.Join(", ", x.Select(y => y.Key))} all follow {x.Key}. Only one is allowed");
+            // var problems = idToAfter
+            //     .GroupBy(x => x.Value)
+            //     .Where(x => x.Count() > 1)
+            //     .Select(x => $"The documents {string.Join(", ", x.Select(y => y.Key))} all follow {x.Key}. Only one is allowed");
 
-            var problemString = string.Join("\n", problems);
+            // var problemString = string.Join("\n", problems);
 
-            if (problemString != string.Empty)
-                throw this.Context.Exception("Ther were a problem with the ordering\n" + problemString);
+            // if (problemString != string.Empty)
+            //     throw this.Context.Exception("Ther were a problem with the ordering\n" + problemString);
 
             var orderedList = new List<string>();
 
-            var startValues = idToAfter.Where(x => !idToAfter.ContainsValue(x.Key)).ToArray();
+            var startValues = idToAfter.Where(x => x.Value is null && idToAfter.ContainsValue(x.Key)).OrderBy(x => x.Key).Select(x => x.Key);
+            // while (startValues.Any(x=> idToAfter.ContainsKey(x.Value)))
+            // {
 
-            if (stateLookup.Count != 1)
-            {
+            // }
+            // var startValues = idToAfter.Where(x => x.Value is null).OrderBy(x => x.Key).Select(x => x.Key);
+
+            if (stateLookup.Count != 1) {
                 // check for circles or gaps
-                if (startValues.Length == 0)
-                {
+                if (!startValues.Any()) {
                     // we have a circle.
                     var ordering = string.Join("\n", idToAfter.Select(x => $"{x.Key} => {x.Value}"));
                     throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency\n." + ordering);
                 }
-                if (startValues.Length > 1)
-                    throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
 
-                // Order the entrys.
-                {
-                    var current = startValues.Single().Key;
-                    while (true)
-                    {
-                        orderedList.Insert(0, current);
-                        if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
-                            break;
+
+
+
+                var stack = new Stack<string>(startValues);
+
+                while (stack.TryPop(out var current)) {
+                    orderedList.Add(current);
+                    var next = lookup[current];
+                    foreach (var item in next.OrderByDescending(x => x)) {
+                        stack.Push(item);
                     }
                 }
-            }
-            else
-            {
+
+
+
+
+
+                // if (startValues.Length > 1)
+                //     throw this.Context.Exception($"There is a  problem with the ordering. There are Gaps. Possible gabs are after {string.Join(", ", startValues.Select(x => x.Key))}");
+
+                // // Order the entrys.
+                // {
+                //     var current = startValues.Single().Key;
+                //     while (true) {
+                //         orderedList.Insert(0, current);
+                //         if (!idToAfter.TryGetValue(current, out current!)) // if its null we break, and won't use it againg.
+                //             break;
+                //     }
+                // }
+            } else {
                 orderedList.Add(stateLookup.First().Key);
             }
+
+            Console.WriteLine(string.Join("\n", orderedList));
 
             await this.UpdateHeadersWithContaining(orderedList, stateLookup);
 
@@ -116,31 +137,24 @@ namespace Nota.Site.Generator.Stages
 
             List<string>? currentChapterIds = null;
 
-            foreach (var id in orderedList)
-            {
-                if (currentChapterIds is null)
-                {
+            foreach (var id in orderedList) {
+                if (currentChapterIds is null) {
                     currentChapterIds = new List<string>();
                     chapterPartitions.Add(currentChapterIds);
                     currentChapterIds.Add(id);
-                }
-                else if (documentsWithChapters.Contains(id))
-                {
+                } else if (documentsWithChapters.Contains(id)) {
                     // since a document may not start with a new chapter but can contain text befor that from a
                     // previous chapter we add this Id also to the previous chapter.
                     currentChapterIds.Add(id);
                     currentChapterIds = new List<string>();
                     chapterPartitions.Add(currentChapterIds);
                     currentChapterIds.Add(id);
-                }
-                else
-                {
+                } else {
                     currentChapterIds.Add(id);
                 }
             }
             var newPatirions = new List<Partition>();
-            for (int i = 0; i < chapterPartitions.Count; i++)
-            {
+            for (int i = 0; i < chapterPartitions.Count; i++) {
                 var currentParition = chapterPartitions[i];
                 var takeFirstWithoutChapter = i == 0;
                 var takeLastChapter = i == chapterPartitions.Count - 1;
@@ -157,14 +171,18 @@ namespace Nota.Site.Generator.Stages
                 };
 
                 newPatirions.Add(partitition);
-                foreach (var item in documentsInPartition)
-                {
+                foreach (var item in documentsInPartition) {
 
                     list.Add(item);
                 }
 
 
             }
+
+
+            Console.WriteLine("Output:");
+            Console.WriteLine(string.Join("\n", list.Select(x => x.Id)));
+
 
             return list.ToImmutable();
 
@@ -173,24 +191,19 @@ namespace Nota.Site.Generator.Stages
         private async Task UpdateHeadersWithContaining(List<string> orderedList, Dictionary<string, IDocument<MarkdownDocument>> stateLookup)
         {
             var headerStack = new Stack<HeaderBlock>();
-            foreach (var doc in orderedList.Select(x => stateLookup[x].Value))
-            {
+            foreach (var doc in orderedList.Select(x => stateLookup[x].Value)) {
                 var blocks = doc.Blocks;
                 ScanAndReplace(blocks);
                 void ScanAndReplace(IList<MarkdownBlock> blocks)
                 {
 
-                    for (var i = 0; i < blocks.Count; i++)
-                    {
+                    for (var i = 0; i < blocks.Count; i++) {
                         var block = blocks[i];
-                        if (block is ChapterHeaderBlock ch && !string.IsNullOrWhiteSpace(ch.ChapterId))
-                        {
+                        if (block is ChapterHeaderBlock ch && !string.IsNullOrWhiteSpace(ch.ChapterId)) {
                             while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= ch.HeaderLevel)
                                 headerStack.Pop();
                             headerStack.Push(ch);
-                        }
-                        else if (block is HeaderBlock bl)
-                        {
+                        } else if (block is HeaderBlock bl) {
                             while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= bl.HeaderLevel)
                                 headerStack.Pop();
                             headerStack.Push(bl);
@@ -198,8 +211,7 @@ namespace Nota.Site.Generator.Stages
                             var id = GenerateHeaderString(headerStack);
                             if (bl is ChapterHeaderBlock ch2)
                                 ch2.ChapterId = id;
-                            else
-                            {
+                            else {
                                 var newChapter = new ChapterHeaderBlock()
                                 {
                                     HeaderLevel = bl.HeaderLevel,
@@ -208,9 +220,7 @@ namespace Nota.Site.Generator.Stages
                                 };
                                 blocks[i] = newChapter;
                             }
-                        }
-                        else if (block is SoureReferenceBlock sr)
-                        {
+                        } else if (block is SoureReferenceBlock sr) {
                             ScanAndReplace(sr.Blocks);
                         }
                     }
@@ -269,26 +279,21 @@ namespace Nota.Site.Generator.Stages
 
             List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>? currentList = null;
 
-            if (takeFirstWithoutChapter)
-            {
+            if (takeFirstWithoutChapter) {
                 currentList = new List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>();
                 listOfChaptersInPartition.Add(currentList);
             }
 
-            for (int j = 0; j < documentList.Count; j++)
-            {
+            for (int j = 0; j < documentList.Count; j++) {
                 var currentDocument = documentList[j];
                 ScanBlocks(currentDocument.Value.Blocks);
                 void ScanBlocks(IList<MarkdownBlock> blocks)
                 {
-                    foreach (var block in blocks)
-                    {
-                        if (block is SoureReferenceBlock soureReference)
-                        {
+                    foreach (var block in blocks) {
+                        if (block is SoureReferenceBlock soureReference) {
                             ScanBlocks(soureReference.Blocks);
 
-                        }
-                        else if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel <= this.chapterSeperation))
+                        } else if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel <= this.chapterSeperation))
                             currentList.Add((currentDocument, block));
 
                         else if (block is HeaderBlock header && header.HeaderLevel <= this.chapterSeperation
@@ -298,10 +303,8 @@ namespace Nota.Site.Generator.Stages
                             currentList = new List<(IDocument<MarkdownDocument>, MarkdownBlock)>();
                             listOfChaptersInPartition.Add(currentList);
                             currentList.Add((currentDocument, block));
-                        }
-                        else if (block is HeaderBlock header__ && header__.HeaderLevel <= this.chapterSeperation
-                            && j == documentList.Count - 1)
-                        {
+                        } else if (block is HeaderBlock header__ && header__.HeaderLevel <= this.chapterSeperation
+                              && j == documentList.Count - 1) {
                             // we wan't to break the for not foreach, but we are alreary in the last for loop.
                             break; // so this is enough
                         }

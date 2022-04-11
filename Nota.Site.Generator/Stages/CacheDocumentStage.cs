@@ -40,34 +40,34 @@ namespace Nota.Site.Generator.Stages
 
             var list = ImmutableList.CreateBuilder<IDocument<string>>();
 
-            foreach (var input in inputList)
-            {
+            foreach (var input in inputList) {
                 var subOptions = options.CreateSubToken();
                 var fileName = $"{input.Id}-{input.Hash}";
 
 
                 var fileInfo = new FileInfo(Path.Combine(currentDir.FullName, fileName));
-                ImmutableList<IDocument<string>> result;
-                if (fileInfo.Exists)
-                {
-                    using var stream = fileInfo.OpenRead();
-                    result = (await JsonSerelizer.Load<(string value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
+                ImmutableList<IDocument<string>>? result = null;
+                if (fileInfo.Exists) {
+                    try {
+                        using var stream = fileInfo.OpenRead();
+                        result = (await JsonSerelizer.Load<(string value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
 
-                        .Select(x => this.Context.CreateDocument(x.value, x.hash, x.id, ToContainer(x.metadata)))
-                        .ToImmutableList();
+                            .Select(x => this.Context.CreateDocument(x.value, x.hash, x.id, ToContainer(x.metadata)))
+                            .ToImmutableList();
 
-                    MetadataContainer ToContainer(Dictionary<Type, object> dic)
-                    {
-                        var container = Context.EmptyMetadata;
-                        foreach (var (key, value) in dic)
+                        MetadataContainer ToContainer(Dictionary<Type, object> dic)
                         {
-                            container.Add(key, value);
+                            var container = Context.EmptyMetadata;
+                            foreach (var (key, value) in dic) {
+                                container.Add(key, value);
+                            }
+                            return container;
                         }
-                        return container;
+                    } catch (System.Exception e) {
+                        Context.Logger.Error($"Faild to load cache {e.Message}");
                     }
                 }
-                else
-                {
+                if (result is null) {
                     var completion = new TaskCompletionSource<ImmutableList<IDocument<string>>>();
 
                     this.result.PostStages += Result_PostStages;
@@ -90,8 +90,7 @@ namespace Nota.Site.Generator.Stages
                     Dictionary<Type, object> ToDic(MetadataContainer container)
                     {
                         var dic = new Dictionary<Type, object>();
-                        foreach (var item in container.Keys)
-                        {
+                        foreach (var item in container.Keys) {
                             dic.Add(item, container.GetValue(item));
                         }
                         return dic;
@@ -130,34 +129,34 @@ namespace Nota.Site.Generator.Stages
 
             var list = ImmutableList.CreateBuilder<IDocument<Stream>>();
 
-            foreach (var input in inputList)
-            {
+            foreach (var input in inputList) {
                 var subOptions = options.CreateSubToken();
                 var fileName = $"{input.Id}-{input.Hash}";
 
 
                 var fileInfo = new FileInfo(Path.Combine(currentDir.FullName, fileName));
-                ImmutableList<IDocument<Stream>> result;
-                if (fileInfo.Exists)
-                {
-                    using var stream = fileInfo.OpenRead();
-                    result = (await JsonSerelizer.Load<(byte[] value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
+                ImmutableList<IDocument<Stream>>? result = null;
+                if (fileInfo.Exists) {
+                    try {
+                        using var stream = fileInfo.OpenRead();
+                        result = (await JsonSerelizer.Load<(byte[] value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
 
-                        .Select(x => this.Context.CreateDocument(new MemoryStream(x.value) as Stream, x.hash, x.id, ToContainer(x.metadata)))
-                        .ToImmutableList();
+                            .Select(x => this.Context.CreateDocument<Stream>(null!, x.hash, x.id, ToContainer(x.metadata)).With(()=>new MemoryStream(x.value) as Stream, x.hash))
+                            .ToImmutableList();
 
-                    MetadataContainer ToContainer(Dictionary<Type, object> dic)
-                    {
-                        var container = Context.EmptyMetadata;
-                        foreach (var (key, value) in dic)
+                        MetadataContainer ToContainer(Dictionary<Type, object> dic)
                         {
-                            container = container.Add(key, value);
+                            var container = Context.EmptyMetadata;
+                            foreach (var (key, value) in dic) {
+                                container = container.Add(key, value);
+                            }
+                            return container;
                         }
-                        return container;
+                    } catch (System.Exception e) {
+                        Context.Logger.Error($"Faild to load cache {e.Message}");
                     }
                 }
-                else
-                {
+                if (result is null) {
                     var completion = new TaskCompletionSource<ImmutableList<IDocument<Stream>>>();
 
                     this.result.PostStages += Result_PostStages;
@@ -179,8 +178,7 @@ namespace Nota.Site.Generator.Stages
 
                     async Task<byte[]> ToArray(Stream s)
                     {
-                        using (s)
-                        {
+                        using (s) {
                             using var ms = new MemoryStream();
                             await s.CopyToAsync(ms);
                             return ms.ToArray();
@@ -191,8 +189,7 @@ namespace Nota.Site.Generator.Stages
                     Dictionary<Type, object> ToDic(MetadataContainer container)
                     {
                         var dic = new Dictionary<Type, object>();
-                        foreach (var item in container.Keys)
-                        {
+                        foreach (var item in container.Keys) {
                             dic.Add(item, container.GetValue(item));
                         }
                         return dic;
@@ -248,8 +245,7 @@ namespace Nota.Site.Generator.Stages
             var refKind = JValue.CreateString("ref");
             var scalarKind = JValue.CreateString("scalar");
 
-            while (queu.TryDequeue(out var current))
-            {
+            while (queu.TryDequeue(out var current)) {
 
                 var type = current.GetType();
                 var typeName = type.AssemblyQualifiedName;
@@ -260,8 +256,7 @@ namespace Nota.Site.Generator.Stages
                 currentJObject.Add("type", typeName);
                 result.Add(currentJObject);
 
-                if (type.IsArray)
-                {
+                if (type.IsArray) {
                     var arrayElements = new JArray();
                     currentJObject.Add("elements", arrayElements);
 
@@ -269,31 +264,24 @@ namespace Nota.Site.Generator.Stages
                     for (int i = 0; i < array.Count; i++)
                         arrayElements.Add(GetValueObject(array[i]));
 
-                }
-                else if (current is System.Runtime.CompilerServices.ITuple tuple)
-                {
+                } else if (current is System.Runtime.CompilerServices.ITuple tuple) {
                     var tupleArray = new JArray();
                     currentJObject.Add("tuple", tupleArray);
                     for (int i = 0; i < tuple.Length; i++)
                         tupleArray.Add(GetValueObject(tuple[i]));
-                }
-                else if (current.GetType().IsGenericType && current.GetType().GetGenericTypeDefinition() == typeof(System.Collections.Immutable.ImmutableList<>))
-                {
+                } else if (current.GetType().IsGenericType && current.GetType().GetGenericTypeDefinition() == typeof(System.Collections.Immutable.ImmutableList<>)) {
                     var arrayElements = new JArray();
                     currentJObject.Add("elements", arrayElements);
 
                     var array = (System.Collections.IList)current;
                     for (int i = 0; i < array.Count; i++)
                         arrayElements.Add(GetValueObject(array[i]));
-                }
-                else if (implementedInterfaces.Contains(typeof(IDictionary<,>)))
-                {
+                } else if (implementedInterfaces.Contains(typeof(IDictionary<,>))) {
                     var arrayElements = new JArray();
                     currentJObject.Add("map", arrayElements);
 
                     var enumerable = (System.Collections.IEnumerable)current;
-                    foreach (var item in enumerable)
-                    {
+                    foreach (var item in enumerable) {
                         if (item is null)
                             continue;
 
@@ -314,9 +302,7 @@ namespace Nota.Site.Generator.Stages
                         entry.Add("key", GetValueObject(key));
                         entry.Add("value", GetValueObject(value));
                     }
-                }
-                else if (implementedInterfaces.Contains(typeof(ICollection<>)))
-                {
+                } else if (implementedInterfaces.Contains(typeof(ICollection<>))) {
                     var constructor = type.GetConstructor(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, Type.EmptyTypes, null);
                     if (constructor is null && !type.IsValueType)
                         throw new ArgumentException($"Graphe contains a type that has no default constructor. ({typeName})");
@@ -331,9 +317,7 @@ namespace Nota.Site.Generator.Stages
 
 
 
-                }
-                else
-                {
+                } else {
                     var constructor = type.GetConstructor(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, Type.EmptyTypes, null);
                     if (constructor is null && !type.IsValueType)
                         throw new ArgumentException($"Graphe contains a type that has no default constructor. ({typeName})");
@@ -344,14 +328,12 @@ namespace Nota.Site.Generator.Stages
                     var propertyArray = new JObject();
                     currentJObject.Add("propertys", propertyArray);
 
-                    foreach (var property in properties)
-                    {
+                    foreach (var property in properties) {
 
                         var setMethod = property.GetSetMethod();
 
 
-                        if (setMethod is null)
-                        {
+                        if (setMethod is null) {
                             var backiongFiled = GetBackingField(property);
                             if (backiongFiled is null)
                                 continue;
@@ -371,8 +353,7 @@ namespace Nota.Site.Generator.Stages
                 JObject GetValueObject(object? value)
                 {
                     var valueObject = new JObject();
-                    switch (value)
-                    {
+                    switch (value) {
                         case null:
                             valueObject.Add("Kind", refKind);
                             valueObject.Add("value", JValue.FromObject(-1));
@@ -424,13 +405,10 @@ namespace Nota.Site.Generator.Stages
                             break;
 
                         default:
-                            if (value.GetType().IsEnum)
-                            {
+                            if (value.GetType().IsEnum) {
                                 valueObject.Add("Kind", scalarKind);
                                 valueObject.Add("value", JValue.FromObject(Convert.ChangeType(value, typeof(long))));
-                            }
-                            else
-                            {
+                            } else {
                                 valueObject.Add("Kind", refKind);
                                 valueObject.Add("value", JValue.FromObject(Enqueue(value)));
                             }
@@ -485,8 +463,7 @@ namespace Nota.Site.Generator.Stages
             var deserelizedObjects = new object[json.Count];
 
             // create Objects
-            for (int i = 0; i < json.Count; i++)
-            {
+            for (int i = 0; i < json.Count; i++) {
                 var entry = json[i];
 
                 var typeName = entry["type"]?.ToObject<string>();
@@ -497,8 +474,7 @@ namespace Nota.Site.Generator.Stages
                 if (type is null)
                     throw new ArgumentException($"Can't find Type {typeName}");
 
-                if (entry["propertys"] is JObject || entry["map"] is JArray || entry["tuple"] is JArray)
-                {
+                if (entry["propertys"] is JObject || entry["map"] is JArray || entry["tuple"] is JArray) {
                     var constructor = type.GetConstructor(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, Type.EmptyTypes, null);
                     object currentObject;
                     if (constructor != null)
@@ -511,13 +487,10 @@ namespace Nota.Site.Generator.Stages
                     deserelizedObjects[i] = currentObject;
 
 
-                }
-                else if (entry["elements"] is JArray jsonElements)
-                {
+                } else if (entry["elements"] is JArray jsonElements) {
                     var implementedInterfaces = new HashSet<Type>(type.GetInterfaces().Where(x => x.IsGenericType).Select(x => x.GetGenericTypeDefinition()).Concat(type.GetInterfaces().Where(x => !x.IsGenericType)));
 
-                    if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ImmutableList<>))
-                    {
+                    if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ImmutableList<>)) {
                         var elementType = type.GetGenericArguments().FirstOrDefault();
                         if (elementType is null)
                             throw new InvalidOperationException($"Type {type} should be an Array and have an ElementType");
@@ -531,20 +504,14 @@ namespace Nota.Site.Generator.Stages
 
 
                         deserelizedObjects[i] = builder;
-                    }
-
-                    else if (type.IsArray)
-                    {
+                    } else if (type.IsArray) {
 
                         var elementType = type.GetElementType();
                         if (elementType is null)
                             throw new InvalidOperationException($"Type {type} should be an Array and have an ElementType");
 
                         deserelizedObjects[i] = Array.CreateInstance(elementType, jsonElements.Count);
-                    }
-
-                    else if (implementedInterfaces.Contains(typeof(System.Collections.ICollection)))
-                    {
+                    } else if (implementedInterfaces.Contains(typeof(System.Collections.ICollection))) {
                         var constructor = type.GetConstructor(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance, null, Type.EmptyTypes, null);
                         if (constructor is null && !type.IsValueType)
                             throw new ArgumentException($"Graphe contains a type that has no default constructor. ({typeName})");
@@ -560,9 +527,7 @@ namespace Nota.Site.Generator.Stages
                         deserelizedObjects[i] = currentObject;
                     }
 
-                }
-                else
-                {
+                } else {
                     throw new NotSupportedException();
                 }
             }
@@ -584,78 +549,53 @@ namespace Nota.Site.Generator.Stages
                 object? GetValue(ValueWrapper valueWrapper, Type targetType)
                 {
                     object value;
-                    if (valueWrapper.Kind == ValueKind.@ref)
-                    {
+                    if (valueWrapper.Kind == ValueKind.@ref) {
                         if ((long)valueWrapper.Value == -1)
                             return null;
                         value = deserelizedObjects[(int)(long)valueWrapper.Value];
-                    }
-                    else if (valueWrapper.Kind == ValueKind.scalar)
-                    {
-                        if (targetType == typeof(DateTime))
-                        {
+                    } else if (valueWrapper.Kind == ValueKind.scalar) {
+                        if (targetType == typeof(DateTime)) {
                             var txt = (string)valueWrapper.Value;
                             var splited = txt.Split('|');
                             var ticks = long.Parse(splited[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture);
                             var kind = (DateTimeKind)Enum.Parse(typeof(DateTimeKind), splited[1]);
 
                             value = new DateTime(ticks, kind);
-                        }
-                        else if (targetType == typeof(DateTimeOffset))
-                        {
+                        } else if (targetType == typeof(DateTimeOffset)) {
                             var txt = (string)valueWrapper.Value;
                             var splited = txt.Split('|');
                             var ticks = long.Parse(splited[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture);
                             var offset = long.Parse(splited[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture);
 
                             value = new DateTimeOffset(ticks, new TimeSpan(offset));
-                        }
-                        else if (targetType == typeof(TimeSpan))
-                        {
+                        } else if (targetType == typeof(TimeSpan)) {
                             value = TimeSpan.FromTicks((long)valueWrapper.Value);
-                        }
-                        else if (targetType == typeof(Type))
-                        {
+                        } else if (targetType == typeof(Type)) {
                             value = Type.GetType((string)valueWrapper.Value) ?? throw new ReflectionTypeLoadException(null, null, $"Failed to load {valueWrapper.Value}");
-                        }
-                        else if (targetType == typeof(byte[]))
-                        {
+                        } else if (targetType == typeof(byte[])) {
                             var data = ((string)valueWrapper.Value);
                             value = Convert.FromBase64String(data);
-                        }
-                        else if (targetType.IsEnum)
-                        {
+                        } else if (targetType.IsEnum) {
                             var l = (long)valueWrapper.Value;
-value =                             Enum.ToObject(targetType, l);
+                            value = Enum.ToObject(targetType, l);
                             //value = Convert.ChangeType(l, targetType);
-                        }
-                        else
+                        } else
                             value = valueWrapper.Value;
-                    }
-                    else
+                    } else
                         throw new NotSupportedException($"Type {targetType} is not supported");
 
-                    if (!targetType.IsAssignableFrom(value.GetType()))
-                    {
+                    if (!targetType.IsAssignableFrom(value.GetType())) {
                         var converter = System.ComponentModel.TypeDescriptor.GetConverter(targetType);
-                        if (targetType == typeof(byte))
-                        {
+                        if (targetType == typeof(byte)) {
                             value = (byte)Convert.ChangeType(value, targetType, System.Globalization.CultureInfo.InvariantCulture);
                             //value = (byte)value;
-                        }
-                        else if (targetType == typeof(short))
-                        {
+                        } else if (targetType == typeof(short)) {
                             value = (short)value;
-                        }
-                        else
-                        {
-                            try
-                            {
+                        } else {
+                            try {
                                 value = converter.ConvertFrom(value);
 
-                            }
-                            catch (NotSupportedException)
-                            {
+                            } catch (NotSupportedException) {
                                 value = Convert.ChangeType(value, targetType);
                             }
                         }
@@ -665,11 +605,9 @@ value =                             Enum.ToObject(targetType, l);
                     return value;
                 }
 
-                if (entry["propertys"] is JObject jsonPropertys)
-                {
+                if (entry["propertys"] is JObject jsonPropertys) {
 
-                    foreach (var pair in jsonPropertys)
-                    {
+                    foreach (var pair in jsonPropertys) {
                         var property = type.GetProperty(pair.Key);
                         if (property is null)
                             throw new ArgumentException($"Type {type} does not contains property {pair.Key}");
@@ -685,16 +623,13 @@ value =                             Enum.ToObject(targetType, l);
 
                         if (getMethod is null)
                             throw new ArgumentException($"Type {type} does not have getter for property {pair.Key}");
-                        if (setMethod is null)
-                        {
+                        if (setMethod is null) {
                             var backiongFiled = GetBackingField(property);
                             if (backiongFiled is null)
                                 throw new ArgumentException($"Type {type} does not have setter for property {pair.Key}");
 
                             backiongFiled.SetValue(currentObject, value);
-                        }
-                        else
-                        {
+                        } else {
                             property.SetValue(currentObject, value);
 
                         }
@@ -705,20 +640,16 @@ value =                             Enum.ToObject(targetType, l);
 
 
                     }
-                }
-                else if (entry["elements"] is JArray jsonElements)
-                {
+                } else if (entry["elements"] is JArray jsonElements) {
                     var implementedInterfaces = new HashSet<Type>(type.GetInterfaces().Where(x => x.IsGenericType).Select(x => x.GetGenericTypeDefinition()).Concat(type.GetInterfaces().Where(x => !x.IsGenericType)));
 
-                    if (currentObject.GetType().Name.Contains("Builder"))
-                    {
+                    if (currentObject.GetType().Name.Contains("Builder")) {
 
                         var listType = currentObject.GetType();
                         var addMethod = listType.GetMethod("Add");
 
 
-                        for (int j = 0; j < jsonElements.Count; j++)
-                        {
+                        for (int j = 0; j < jsonElements.Count; j++) {
                             var valueWrapper = jsonElements[j].ToObject<ValueWrapper>();
                             if (valueWrapper is null)
                                 throw new ArgumentException($"Type {type} does not contains correct wrapper for element {j}");
@@ -731,11 +662,8 @@ value =                             Enum.ToObject(targetType, l);
                         deserelizedObjects[i] = immutableList;
 
 
-                    }
-                    else if (currentObject is Array array)
-                    {
-                        for (int j = 0; j < array.Length; j++)
-                        {
+                    } else if (currentObject is Array array) {
+                        for (int j = 0; j < array.Length; j++) {
                             var valueWrapper = jsonElements[j].ToObject<ValueWrapper>();
                             if (valueWrapper is null)
                                 throw new ArgumentException($"Type {type} does not contains correct wrapper for element {j}");
@@ -743,9 +671,7 @@ value =                             Enum.ToObject(targetType, l);
 
                             array.SetValue(value, j);
                         }
-                    }
-                    else if (implementedInterfaces.Contains(typeof(ICollection<>)))
-                    {
+                    } else if (implementedInterfaces.Contains(typeof(ICollection<>))) {
                         var collectionInterface = currentObject.GetType().GetInterfaces().Where(x => x.IsGenericType)
                                                     .Where(x => x.GetGenericTypeDefinition() == typeof(ICollection<>)).Single();
 
@@ -753,8 +679,7 @@ value =                             Enum.ToObject(targetType, l);
                         var addMethod = collectionInterface.GetMethod(nameof(ICollection<object>.Add));
                         var elementType = collectionInterface.GetGenericArguments().Single();
 
-                        for (int j = 0; j < jsonElements.Count; j++)
-                        {
+                        for (int j = 0; j < jsonElements.Count; j++) {
                             var valueWrapper = jsonElements[j].ToObject<ValueWrapper>();
                             if (valueWrapper is null)
                                 throw new ArgumentException($"Type {type} does not contains correct wrapper for element {j}");
@@ -773,12 +698,8 @@ value =                             Enum.ToObject(targetType, l);
                         //var array = (System.Collections.ICollection)current;
                         //foreach (var item in array)
                         //    arrayElements.Add(GetValueObject(item));
-                    }
-
-                    else throw new NotSupportedException($"{currentObject} is not an array nor an immutableList builder.");
-                }
-                else if (entry["map"] is JArray jsonMap)
-                {
+                    } else throw new NotSupportedException($"{currentObject} is not an array nor an immutableList builder.");
+                } else if (entry["map"] is JArray jsonMap) {
 
                     var interfaceType = type.GetInterfaces().Where(x => x.IsGenericType).FirstOrDefault(x => x.GetGenericTypeDefinition() == typeof(IDictionary<,>));
                     if (interfaceType is null)
@@ -792,8 +713,7 @@ value =                             Enum.ToObject(targetType, l);
                     var keyType = genericArguments[0];
                     var valueType = genericArguments[1];
 
-                    for (int j = 0; j < jsonMap.Count; j++)
-                    {
+                    for (int j = 0; j < jsonMap.Count; j++) {
                         var mapEntry = (JObject)jsonMap[j];
 
 
@@ -811,27 +731,21 @@ value =                             Enum.ToObject(targetType, l);
                         addMethod.Invoke(currentObject, new object?[] { key, value });
 
                     }
-                }
-                else if (entry["tuple"] is JArray jsonTuple)
-                {
-                    for (int j = 0; j < jsonTuple.Count; j++)
-                    {
+                } else if (entry["tuple"] is JArray jsonTuple) {
+                    for (int j = 0; j < jsonTuple.Count; j++) {
 
                         var valueWrapper = jsonTuple[j].ToObject<ValueWrapper>();
                         if (valueWrapper is null)
                             throw new ArgumentException($"Type {type} does not contains correct wrapper for element {j}");
 
 
-                        if (type.IsValueType)
-                        {
+                        if (type.IsValueType) {
                             var filed = type.GetField("Item" + (j + 1));
                             if (filed is null)
                                 throw new ArgumentException("The tuple size is incorrect");
                             var value = GetValue(valueWrapper, filed.FieldType);
                             filed.SetValue(currentObject, value);
-                        }
-                        else
-                        {
+                        } else {
                             var filed = type.GetProperty("Item" + (j + 1));
                             if (filed is null)
                                 throw new ArgumentException("The tuple size is incorrect");
@@ -839,9 +753,7 @@ value =                             Enum.ToObject(targetType, l);
                             filed.SetValue(currentObject, value);
                         }
                     }
-                }
-                else
-                {
+                } else {
                     throw new NotSupportedException();
                 }
 

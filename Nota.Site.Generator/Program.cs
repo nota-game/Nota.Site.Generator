@@ -96,6 +96,7 @@ namespace Nota.Site.Generator
             const string cache = "cache";
             const string output = "out";
 
+            Console.WriteLine(configuration);
 
             configuration ??= new FileInfo("config.json");
 
@@ -103,8 +104,7 @@ namespace Nota.Site.Generator
                 throw new FileNotFoundException($"No configuration file was found ({configuration.FullName})");
 
             Config config;
-            await using (var context = new GeneratorContext())
-            {
+            await using (var context = new GeneratorContext()) {
 
 
 
@@ -134,12 +134,10 @@ namespace Nota.Site.Generator
             }
 
             var editUrl = config.ContentRepo?.Url;
-            if (editUrl is not null)
-            {
+            if (editUrl is not null) {
                 if (!editUrl.StartsWith("https://github.com/") || !editUrl.EndsWith(".git"))
                     editUrl = null;
-                else
-                {
+                else {
                     editUrl = editUrl[..^".git".Length] + "/edit/";
                 }
             }
@@ -152,16 +150,14 @@ namespace Nota.Site.Generator
 
 
             using var repo = PreGit(config, author, workdirPath, cache, output);
-            await using (var context = new GeneratorContext())
-            {
+            await using (var context = new GeneratorContext()) {
 
                 var configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
                  .File()
                  .Json<Config>("Parse Configuration")
                  ;
 
-                if (serve)
-                {
+                if (serve) {
                     var workingDir = new DirectoryInfo(output);
                     workingDir.Create();
                     host = new WebHostBuilder()
@@ -261,9 +257,11 @@ namespace Nota.Site.Generator
                      .GroupBy(x => x.Value.FrindlyName,
                      (key, input) => DocumentsForBranch(input, key, editUrl), "Select Content Files from Ref")
                         .EmbededXmp()
-                    )
+                    ).Debug("files")
 
                     ;
+
+
 
                 var allBooks = comninedFiles.ListTransform(x =>
 
@@ -317,15 +315,13 @@ namespace Nota.Site.Generator
                      .Merge(imageData, (file, image) =>
                      {
                          var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
-                         if (references.Any())
-                         {
+                         if (references.Any()) {
                              var newData = new ImageReferences()
                              {
                                  References = references.ToArray()
                              };
                              return file.With(file.Metadata.Add(newData));
-                         }
-                         else return file;
+                         } else return file;
                      })
                     .GroupBy(
                     x =>
@@ -342,11 +338,9 @@ namespace Nota.Site.Generator
 
                              var doc = x.First();
                              doc = doc.WithId(key.Single().Value + NotaPath.GetExtension(doc.Id));
-                             foreach (var item in x.Skip(1))
-                             {
+                             foreach (var item in x.Skip(1)) {
                                  var metadata = item.Metadata.TryGetValue<ImageReferences>();
-                                 if (metadata is null)
-                                 {
+                                 if (metadata is null) {
                                      metadata = new ImageReferences()
                                      {
                                          References = new[] {new ImageReference() {
@@ -452,6 +446,7 @@ namespace Nota.Site.Generator
 
 
                 var razorProvider = files
+                .Debug("test")
                     .FileProvider("Content", "Content file Provider")
                     .Concat(layoutProvider, "Concat Content and layout FileProvider")
                     .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart")
@@ -501,11 +496,11 @@ namespace Nota.Site.Generator
                    //.Select(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                    .Concat(schemaFiles)
                    .Concat(staticFiles)
+                   .DownloadExternals()
                    .Persist(new DirectoryInfo(output))
                    ;
 
-                if (host != null)
-                {
+                if (host != null) {
 
                     s.Stop();
                     context.Logger.Info($"Preperation Took {s.Elapsed}");
@@ -514,10 +509,8 @@ namespace Nota.Site.Generator
 
                     Console.CancelKeyPress += (sender, e) => isRunning = false;
                     bool forceUpdate = false;
-                    while (isRunning)
-                    {
-                        try
-                        {
+                    while (isRunning) {
+                        try {
                             Console.Clear();
                             s.Restart();
                             await context.Run(generatorOptions);
@@ -527,9 +520,7 @@ namespace Nota.Site.Generator
                             var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
                             foreach (var item in feature.Addresses)
                                 Console.WriteLine($"Listinging to: {item}");
-                        }
-                        catch (Exception e)
-                        {
+                        } catch (Exception e) {
 
                             Console.WriteLine("Error");
                             Console.Error.WriteLine(e);
@@ -547,9 +538,7 @@ namespace Nota.Site.Generator
                     await host.StopAsync();
 
 
-                }
-                else
-                {
+                } else {
                     await context.Run(generatorOptions);
                     //await g.UpdateFiles().ConfigureAwait(false);
                 }
@@ -569,8 +558,7 @@ namespace Nota.Site.Generator
             if (removedDocuments.Contains(input.Id))
                 return input.WithId($"TO_REMOVE{input.Id}");
 
-            if (Path.GetExtension(input.Id) == ".html")
-            {
+            if (Path.GetExtension(input.Id) == ".html") {
                 using var stream = input.Value;
                 using var reader = new StreamReader(stream);
                 string text = reader.ReadToEnd();
@@ -586,21 +574,18 @@ namespace Nota.Site.Generator
 
 
 
-                foreach (var removedDocument in removed.Value)
-                {
+                foreach (var removedDocument in removed.Value) {
                     var metadata = removedDocument.Metadata.TryGetValue<ImageReferences>();
                     if (metadata is null)
                         continue;
-                    foreach (var item in metadata.References)
-                    {
+                    foreach (var item in metadata.References) {
                         var relativeTo = NotaPath.GetFolder(input.Id).AsSpan();
                         var absolute = item.ReferencedId.AsSpan();
 
                         var clipedRelative = GetFirstPart(relativeTo, out var relativeToRest);
                         var clipedAbsolute = GetFirstPart(absolute, out var absolutRest);
 
-                        while (MemoryExtensions.Equals(clipedAbsolute, clipedRelative, StringComparison.Ordinal))
-                        {
+                        while (MemoryExtensions.Equals(clipedAbsolute, clipedRelative, StringComparison.Ordinal)) {
                             relativeTo = relativeToRest;
                             absolute = absolutRest;
                             clipedRelative = GetFirstPart(relativeTo, out relativeToRest);
@@ -608,8 +593,7 @@ namespace Nota.Site.Generator
 
                         }
 
-                        while (!GetFirstPart(relativeTo, out relativeToRest).IsEmpty)
-                        {
+                        while (!GetFirstPart(relativeTo, out relativeToRest).IsEmpty) {
                             relativeTo = relativeToRest;
                             absolute = ("../" + absolute.ToString()).AsSpan();
                         }
@@ -619,13 +603,10 @@ namespace Nota.Site.Generator
                         ReadOnlySpan<char> GetFirstPart(ReadOnlySpan<char> t, out ReadOnlySpan<char> rest)
                         {
                             var index = t.IndexOf('/');
-                            if (index == -1)
-                            {
+                            if (index == -1) {
                                 rest = string.Empty;
                                 return t;
-                            }
-                            else
-                            {
+                            } else {
                                 rest = t[(index + 1)..^0];
                                 return t[0..index];
                             }
@@ -634,12 +615,10 @@ namespace Nota.Site.Generator
                         // document.QuerySelectorAll($"img[src=\"{absolute.ToString()}\"").Attr("src", "/" + removedDocument.Id);
                         // document.QuerySelectorAll($"img[src=\"{item.ReferencedId}\"").Attr("src", "/" + removedDocument.Id);
 
-                        foreach (var ele in document.All.Where(m => m.LocalName == "img" && m.Attributes.Any(x => x.LocalName == "src" && (x.Value == absoluteStr || x.Value == item.ReferencedId))))
-                        {
+                        foreach (var ele in document.All.Where(m => m.LocalName == "img" && m.Attributes.Any(x => x.LocalName == "src" && (x.Value == absoluteStr || x.Value == item.ReferencedId)))) {
                             var licenseData = removedDocument.Metadata.TryGetValue<XmpMetadata>();
 
-                            if (licenseData != null)
-                            {
+                            if (licenseData != null) {
                                 if (licenseData.RightsReserved.HasValue)
                                     ele.SetAttribute("rightsReseved", licenseData.RightsReserved?.ToString());
                                 if (licenseData.License != null)
@@ -658,8 +637,7 @@ namespace Nota.Site.Generator
                     }
                 }
                 text = document.DocumentElement.OuterHtml;
-                if (originalText != text)
-                {
+                if (originalText != text) {
                     var data = Encoding.UTF8.GetBytes(text);
                     return input.With(() => new MemoryStream(data), context.GetHashForString(text));
                 }
@@ -928,8 +906,7 @@ namespace Nota.Site.Generator
 
         private static TableOfContents GenerateContentsTable(ImmutableList<IDocument<MarkdownDocument>> documents)
         {
-            if (documents.IsEmpty)
-            {
+            if (documents.IsEmpty) {
                 return new TableOfContents()
                 {
                     Chapters = Array.Empty<TableOfContentsEntry>()
@@ -964,11 +941,9 @@ namespace Nota.Site.Generator
             };
             chapterList.Push(entry);
 
-            while (stack.TryPop(out var element))
-            {
+            while (stack.TryPop(out var element)) {
                 var (currentBlock, documentId) = element;
-                switch (currentBlock)
-                {
+                switch (currentBlock) {
                     case HeaderBlock headerBlock:
 
                         string id;
@@ -992,32 +967,23 @@ namespace Nota.Site.Generator
 
                         if (!chapterList.TryPeek(out var lastChapter))
                             lastChapter = null;
-                        if (lastChapter is null)
-                        {
+                        if (lastChapter is null) {
                             System.Diagnostics.Debug.Assert(entry is null);
                             chapterList.Push(currentChapter);
                             entry = currentChapter;
-                        }
-                        else if (lastChapter.Level < currentChapter.Level)
-                        {
+                        } else if (lastChapter.Level < currentChapter.Level) {
                             lastChapter.Sections.Add(currentChapter);
                             chapterList.Push(currentChapter);
-                        }
-                        else
-                        {
+                        } else {
 
-                            while (lastChapter.Level >= currentChapter.Level)
-                            {
+                            while (lastChapter.Level >= currentChapter.Level) {
                                 chapterList.Pop();
                                 lastChapter = chapterList.Peek();
                             }
 
-                            if (lastChapter is null)
-                            {
+                            if (lastChapter is null) {
                                 throw new InvalidOperationException("Should not happen after stich");
-                            }
-                            else
-                            {
+                            } else {
                                 lastChapter.Sections.Add(currentChapter);
                                 chapterList.Push(currentChapter);
                             }
@@ -1032,8 +998,7 @@ namespace Nota.Site.Generator
                         break;
                 }
             }
-            if (entry is null)
-            {
+            if (entry is null) {
                 entry = new TableOfContentsEntry
                 {
                     Page = documents.First().Id,
@@ -1111,10 +1076,9 @@ namespace Nota.Site.Generator
         private static LibGit2Sharp.Repository PreGit(Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)
         {
             LibGit2Sharp.Repository repo;
-            if (Directory.Exists(workdirPath))
-            {
-                try
-                {
+            Console.WriteLine($"Clone {workdirPath}");
+            if (Directory.Exists(workdirPath)) {
+                try {
                     repo = new LibGit2Sharp.Repository(workdirPath);
 
                     var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
@@ -1134,23 +1098,24 @@ namespace Nota.Site.Generator
 
                     //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
 
-                }
-                catch (Exception e)
-                {
+                } catch (Exception e) {
                     Console.Error.WriteLine($"Failed to use old Repo\n{e}");
 
                     Directory.Delete(workdirPath, true);
                     repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
 
                 }
-            }
-            else
+            } else {
+                Console.WriteLine(config.WebsiteRepo?.Url);
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
-
+            }
             var localMaster = repo.Branches[config.WebsiteRepo?.PrimaryBranchName ?? "master"];
             var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
-            if (localMaster is null)
-            {
+            if (localMaster is null) {
+
+                if (originMaster is null) {
+                    throw new InvalidOperationException($"origin is null {string.Join("\n", repo.Branches.Select(x => x.CanonicalName))} ");
+                }
 
                 localMaster = repo.CreateBranch(config.WebsiteRepo?.PrimaryBranchName ?? "master", originMaster.Tip);
                 repo.Branches.Update(localMaster, b => b.TrackedBranch = originMaster.CanonicalName);
@@ -1171,15 +1136,13 @@ namespace Nota.Site.Generator
 
             Directory.CreateDirectory(output);
             var workDirInfo = new DirectoryInfo(workdirPath);
-            foreach (var path in workDirInfo.GetDirectories().Where(x => x.Name != ".git"))
-            {
+            foreach (var path in workDirInfo.GetDirectories().Where(x => x.Name != ".git")) {
                 if (path.Name == "cache")
                     path.MoveTo(cache);
                 else
                     path.MoveTo(Path.Combine(output, path.Name));
             }
-            foreach (var path in workDirInfo.GetFiles())
-            {
+            foreach (var path in workDirInfo.GetFiles()) {
                 path.MoveTo(Path.Combine(output, path.Name));
             }
 
@@ -1200,8 +1163,7 @@ namespace Nota.Site.Generator
 
 
             var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
-            if (status.Any())
-            {
+            if (status.Any()) {
                 var filePathsAdded = status.Added.Concat(status.Modified).Concat(status.RenamedInIndex).Concat(status.RenamedInWorkDir).Concat(status.Untracked).Select(mods => mods.FilePath);
                 foreach (var filePath in filePathsAdded)
                     repo.Index.Add(filePath);
