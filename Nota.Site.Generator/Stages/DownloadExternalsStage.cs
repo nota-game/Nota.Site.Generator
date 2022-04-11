@@ -73,7 +73,7 @@ namespace Nota.Site.Generator.Stages
 
                             yield return this.Context.CreateDocument(null as Stream, hash, id).With(() => new MemoryStream(data), hash);
                         }
-                        script.Source = id;
+                        script.Source = $"/{id}";
                     }
                 }
             }
