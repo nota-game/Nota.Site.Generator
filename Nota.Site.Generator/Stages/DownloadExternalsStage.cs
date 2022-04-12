@@ -56,8 +56,11 @@ namespace Nota.Site.Generator.Stages
 
             bool changed = false;
 
-            async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string url)
+            async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string? url)
             {
+                if (url is null || !url.StartsWith("http")) {
+                    return (url!, null);
+                }
                 try {
                     IDocument<Stream>? resultDocument = null;
                     if (!pathlookup.TryGetValue(url, out var id)) {
