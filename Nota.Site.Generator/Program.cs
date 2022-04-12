@@ -522,6 +522,8 @@ namespace Nota.Site.Generator
                    //.Select(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                    .Concat(schemaFiles)
                    .Concat(staticFiles)
+                   .If(IsHtml).Then(x => x.DownloadExternals())
+                   .Else(x => x)
                    .DownloadExternals()
                    .Persist(new DirectoryInfo(output))
                    ;
