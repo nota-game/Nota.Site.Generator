@@ -58,17 +58,23 @@ namespace Nota.Site.Generator.Stages
 
             async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string url)
             {
-                IDocument<Stream>? resultDocument = null;
-                if (!pathlookup.TryGetValue(url, out var id)) {
-                    var data = await client.GetByteArrayAsync(url);
-                    var mem = new MemoryStream(data);
-                    var hash = this.Context.GetHashForStream(mem);
-                    id = hash;
-                    pathlookup.Add(url, id);
-                    resultDocument = this.Context.CreateDocument(null as Stream, hash, id).With(() => new MemoryStream(data), hash);
-                }
+                try {
+                    IDocument<Stream>? resultDocument = null;
+                    if (!pathlookup.TryGetValue(url, out var id)) {
+                        var data = await client.GetByteArrayAsync(url);
+                        var mem = new MemoryStream(data);
+                        var hash = this.Context.GetHashForStream(mem);
+                        id = hash;
+                        pathlookup.Add(url, id);
+                        resultDocument = this.Context.CreateDocument(null as Stream, hash, id).With(() => new MemoryStream(data), hash);
+                    }
 
-                return (id, resultDocument);
+                    return (id, resultDocument);
+
+                } catch (System.Exception e) {
+                    this.Context.Logger.Error($"Faild to download {url}: {e}");
+                    return (url, null);
+                }
             }
 
             foreach (var item in (document.Head?.ChildNodes as IEnumerable<INode>) ?? Array.Empty<INode>()) {
