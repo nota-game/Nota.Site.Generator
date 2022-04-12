@@ -56,9 +56,9 @@ namespace Nota.Site.Generator.Stages
 
             bool changed = false;
 
-            async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string? url)
+            async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string url)
             {
-                if (url is null || url.StartsWith("http://localhost")) {
+                if (!url.StartsWith("http")) {
                     return (url!, null);
                 }
                 try {
@@ -83,7 +83,7 @@ namespace Nota.Site.Generator.Stages
             foreach (var item in (document.Head?.ChildNodes as IEnumerable<INode>) ?? Array.Empty<INode>()) {
 
                 if (item is AngleSharp.Html.Dom.IHtmlLinkElement link) {
-                    if (!string.IsNullOrWhiteSpace(link.Href)) {
+                    if (!string.IsNullOrWhiteSpace(link.Href) && !link.Href.StartsWith("http://localhost")) {
                         changed = true;
                         (link.Href, var resultDocument) = await TryDownloadFile(link.Href);
                         if (resultDocument is not null) {
@@ -91,7 +91,7 @@ namespace Nota.Site.Generator.Stages
                         }
                     }
                 } else if (item is AngleSharp.Html.Dom.IHtmlScriptElement script) {
-                    if (!string.IsNullOrWhiteSpace(script.Source)) {
+                    if (!string.IsNullOrWhiteSpace(script.Source)&& !script.Source.StartsWith("http://localhost")) {
                         changed = true;
                         (script.Source, var resultDocument) = await TryDownloadFile(script.Source);
                         if (resultDocument is not null) {
