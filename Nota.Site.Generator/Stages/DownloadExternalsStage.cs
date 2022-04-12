@@ -58,7 +58,7 @@ namespace Nota.Site.Generator.Stages
 
             async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string? url)
             {
-                if (url is null || !url.StartsWith("http")) {
+                if (url is null || url.StartsWith("http://localhost")) {
                     return (url!, null);
                 }
                 try {
