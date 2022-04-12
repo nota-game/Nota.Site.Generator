@@ -126,7 +126,6 @@ namespace Nota.Site.Generator.Stages
                 orderedList.Add(stateLookup.First().Key);
             }
 
-            Console.WriteLine(string.Join("\n", orderedList));
 
             await this.UpdateHeadersWithContaining(orderedList, stateLookup);
 
@@ -180,8 +179,7 @@ namespace Nota.Site.Generator.Stages
             }
 
 
-            Console.WriteLine("Output:");
-            Console.WriteLine(string.Join("\n", list.Select(x => x.Id)));
+      
 
 
             return list.ToImmutable();

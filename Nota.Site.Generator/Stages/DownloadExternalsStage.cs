@@ -15,6 +15,7 @@ using AngleSharp;
 using AngleSharp.Dom;
 using System.Net;
 using System.Net.Http;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Nota.Site.Generator.Stages
 {
@@ -55,25 +56,38 @@ namespace Nota.Site.Generator.Stages
 
             bool changed = false;
 
+            async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string url)
+            {
+                IDocument<Stream>? resultDocument = null;
+                if (!pathlookup.TryGetValue(url, out var id)) {
+                    var data = await client.GetByteArrayAsync(url);
+                    var mem = new MemoryStream(data);
+                    var hash = this.Context.GetHashForStream(mem);
+                    id = hash;
+                    pathlookup.Add(url, id);
+                    resultDocument = this.Context.CreateDocument(null as Stream, hash, id).With(() => new MemoryStream(data), hash);
+                }
+
+                return (id, resultDocument);
+            }
+
             foreach (var item in (document.Head?.ChildNodes as IEnumerable<INode>) ?? Array.Empty<INode>()) {
 
-                if (item is AngleSharp.Html.Dom.IHtmlLinkElement link)
-                    Console.WriteLine($"link {link.Href}");
-                if (item is AngleSharp.Html.Dom.IHtmlScriptElement script) {
-                    Console.WriteLine($"Script {script.Source}");
+                if (item is AngleSharp.Html.Dom.IHtmlLinkElement link) {
+                    if (!string.IsNullOrWhiteSpace(link.Href)) {
+                        changed = true;
+                        (link.Href, var resultDocument) = await TryDownloadFile(link.Href);
+                        if (resultDocument is not null) {
+                            yield return resultDocument;
+                        }
+                    }
+                } else if (item is AngleSharp.Html.Dom.IHtmlScriptElement script) {
                     if (!string.IsNullOrWhiteSpace(script.Source)) {
                         changed = true;
-                        if (!pathlookup.TryGetValue(script.Source, out var id)) {
-                            var data = await client.GetByteArrayAsync(script.Source);
-                            var mem = new MemoryStream(data);
-                            var hash = this.Context.GetHashForStream(mem);
-                            changed = true;
-                            id = Guid.NewGuid().ToString();
-                            pathlookup.Add(script.Source, id);
-
-                            yield return this.Context.CreateDocument(null as Stream, hash, id).With(() => new MemoryStream(data), hash);
+                        (script.Source, var resultDocument) = await TryDownloadFile(script.Source);
+                        if (resultDocument is not null) {
+                            yield return resultDocument;
                         }
-                        script.Source = $"/{id}";
                     }
                 }
             }

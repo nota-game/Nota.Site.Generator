@@ -47,7 +47,7 @@ namespace Nota.Site.Generator.Stages
 
                 var fileInfo = new FileInfo(Path.Combine(currentDir.FullName, fileName));
                 ImmutableList<IDocument<string>>? result = null;
-                if (fileInfo.Exists && false) {
+                if (fileInfo.Exists && Nota.UseCache) {
                     try {
                         using var stream = fileInfo.OpenRead();
                         result = (await JsonSerelizer.Load<(string value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
@@ -136,12 +136,12 @@ namespace Nota.Site.Generator.Stages
 
                 var fileInfo = new FileInfo(Path.Combine(currentDir.FullName, fileName));
                 ImmutableList<IDocument<Stream>>? result = null;
-                if (fileInfo.Exists&& false) {
+                if (fileInfo.Exists && Nota.UseCache) {
                     try {
                         using var stream = fileInfo.OpenRead();
                         result = (await JsonSerelizer.Load<(byte[] value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
 
-                            .Select(x => this.Context.CreateDocument<Stream>(null!, x.hash, x.id, ToContainer(x.metadata)).With(()=>new MemoryStream(x.value) as Stream, x.hash))
+                            .Select(x => this.Context.CreateDocument<Stream>(null!, x.hash, x.id, ToContainer(x.metadata)).With(() => new MemoryStream(x.value) as Stream, x.hash))
                             .ToImmutableList();
 
                         MetadataContainer ToContainer(Dictionary<Type, object> dic)

@@ -22,6 +22,7 @@ using AngleSharp.Dom;
 
 using IDocument = Stasistium.Documents.IDocument;
 using LibGit2Sharp;
+using System.Reflection;
 
 namespace Nota.Site.Generator
 {
@@ -84,6 +85,11 @@ namespace Nota.Site.Generator
             return IsMeta(document.Id);
         }
 
+        public static bool UseCache = true;
+
+        private static readonly System.Text.RegularExpressions.Regex hostReplacementRegex
+                         = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
+
         /// <summary>
         /// The Main Method
         /// </summary>
@@ -92,11 +98,17 @@ namespace Nota.Site.Generator
         private static async Task Main(FileInfo? configuration = null, bool serve = false)
         {
 
+            // get version
+            var version = (typeof(Nota).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>() is AssemblyInformationalVersionAttribute attribute)
+            ? attribute.InformationalVersion
+            : "Unknown";
+
+
+
             const string workdirPath = "gitOut";
             const string cache = "cache";
             const string output = "out";
 
-            Console.WriteLine(configuration);
 
             configuration ??= new FileInfo("config.json");
 
@@ -150,7 +162,20 @@ namespace Nota.Site.Generator
 
 
             using var repo = PreGit(config, author, workdirPath, cache, output);
+            if (File.Exists(Path.Combine(cache, "sourceVersion"))) {
+                var oldVersion = await File.ReadAllTextAsync(Path.Combine(cache, "sourceVersion"));
+                if (oldVersion != version || version.EndsWith("-dirty")) {
+                    UseCache = false;
+                }
+            } else {
+                // no version to check, ignore cache
+                UseCache = false;
+            }
             await using (var context = new GeneratorContext()) {
+                context.Logger.Info($"Code Version {version}");
+                context.Logger.Info($"Using cache: {UseCache}");
+                context.CacheFolder.Create();
+                await File.WriteAllTextAsync(Path.Combine(context.CacheFolder.FullName, "sourceVersion"), version);
 
                 var configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
                  .File()
@@ -184,14 +209,16 @@ namespace Nota.Site.Generator
 
 
                 var contentRepo = configFile
-                    .Select(x => x.With(x.Value?.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.ContentRepo)))
+                    .Select(x => x.With(x.Value?.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.ContentRepo))
+                        .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                     .GitClone("Git for Content")
                     //.Where(x => x.Id == "master") // for debuging 
                     //.Where(x => true) // for debuging 
                     ;
 
                 var schemaRepo = configFile
-                    .Select(x => x.With(x.Value?.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.SchemaRepo))
+                    .Select(x =>
+                        x.With(x.Value?.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.SchemaRepo))
                         .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                     .GitClone("Git for Schema");
 
@@ -266,7 +293,7 @@ namespace Nota.Site.Generator
                 var allBooks = comninedFiles.ListTransform(x =>
 
                 {
-                    var bookData = x.SelectMany(y => y.Metadata.GetValue<SiteMetadata>().Books);
+                    var bookData = x.Where(y => y.Metadata.TryGetValue<SiteMetadata>() is not null).SelectMany(y => y.Metadata.GetValue<SiteMetadata>().Books);
                     var bookArray = bookData.Distinct().ToArray();
 
                     var books = new AllBooksMetadata()
@@ -465,7 +492,6 @@ namespace Nota.Site.Generator
                             .Else((x, provider) => x);
 
 
-                var hostReplacementRegex = new System.Text.RegularExpressions.Regex(@"(?<host>http://nota\.org)/schema/", System.Text.RegularExpressions.RegexOptions.Compiled);
                 var schemaFiles = schemaRepo
 
                      .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))))
@@ -726,6 +752,13 @@ namespace Nota.Site.Generator
             var files = grouped
                 .Select(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
                 .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
+                .Concat(dataFile.Select(x =>
+                {
+                    var host = x.Metadata.GetValue<HostMetadata>()!.Host;
+                    var newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host}/schema/");
+                    var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), x.Id);
+                    return x.WithId(location).With(() => newText.ToStream(), x.Context.GetHashForString(newText));
+                }))
                 //.Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
 
                 ;
@@ -1076,7 +1109,6 @@ namespace Nota.Site.Generator
         private static LibGit2Sharp.Repository PreGit(Config config, LibGit2Sharp.Signature author, string workdirPath, string cache, string output)
         {
             LibGit2Sharp.Repository repo;
-            Console.WriteLine($"Clone {workdirPath}");
             if (Directory.Exists(workdirPath)) {
                 try {
                     repo = new LibGit2Sharp.Repository(workdirPath);
@@ -1106,7 +1138,6 @@ namespace Nota.Site.Generator
 
                 }
             } else {
-                Console.WriteLine(config.WebsiteRepo?.Url);
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
             }
             var localMaster = repo.Branches[config.WebsiteRepo?.PrimaryBranchName ?? "master"];

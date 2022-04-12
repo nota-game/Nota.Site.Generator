@@ -22,8 +22,8 @@
 		</PackageReference>
 		<PackageReference Include="Stasistium.Core" Version="0.1.0-alpha.264" />
 		<PackageReference Include="Stasistium.Generator" Version="0.1.0-alpha.264">
-		  <PrivateAssets>all</PrivateAssets>
-		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Stasistium.Git" Version="0.1.0-alpha.264" />
 		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.264" />
@@ -41,5 +41,12 @@
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 
 	</ItemGroup>
+
+	<!-- Include git hash in InformationalVersoin used prevent using cached data if code changed-->
+	<Target Name="SetSourceRevisionId" BeforeTargets="InitializeSourceControlInformation">
+		<Exec Command="git describe --long --always --dirty --exclude=* --abbrev=8" ConsoleToMSBuild="True" IgnoreExitCode="False">
+			<Output PropertyName="SourceRevisionId" TaskParameter="ConsoleOutput" />
+		</Exec>
+	</Target>
 
 </Project>
