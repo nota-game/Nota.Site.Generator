@@ -8,20 +8,21 @@ namespace Nota.Site.Generator
     public readonly struct BookVersion : IComparable<BookVersion>, IComparable, IEquatable<BookVersion>
     {
         private readonly bool isVNext;
-        public BookVersion(bool isDraft, string name) : this(isDraft, false, name)
+        public BookVersion(bool isDraft, string name)
         {
+            this.Name = name ?? throw new ArgumentNullException(nameof(name));
+            this.IsDraft = isDraft;
             if (name == "vNext" && this.IsDraft == false)
                 throw new NotSupportedException("A Tag/Version with the name vNext is not supported");
+            else if (name == "vNext") {
+                this.isVNext = true;
+            } else {
+                this.isVNext = false;
+            }
         }
+       
 
-        private BookVersion(bool isDraft, bool isVNect, string name)
-        {
-            this.IsDraft = isDraft;
-            this.isVNext = isVNect;
-            this.Name = name ?? throw new ArgumentNullException(nameof(name));
-        }
-
-        public static  BookVersion VNext { get; } = new BookVersion(true, true, "vNext");
+        public static BookVersion VNext { get; } = new BookVersion(true, "vNext");
 
         public bool IsDraft { get; }
         public string Name { get; }
@@ -35,6 +36,8 @@ namespace Nota.Site.Generator
 
         public int CompareTo([AllowNull] BookVersion other)
         {
+            if (this.isVNext && other.isVNext)
+                return 0;
             if (this.IsDraft && !other.IsDraft)
                 return 1;
             if (this.IsDraft && other.IsDraft)
@@ -42,8 +45,6 @@ namespace Nota.Site.Generator
             if (!this.IsDraft && other.IsDraft)
                 return -1;
 
-            if (this.isVNext && other.isVNext)
-                return 0;
             if (this.isVNext)
                 return -1;
 
@@ -61,8 +62,7 @@ namespace Nota.Site.Generator
         private int CompareNumberString(ReadOnlySpan<char> x1, ReadOnlySpan<char> x2)
         {
 
-            while (true)
-            {
+            while (true) {
 
                 var currentSection1 = NextSection(x1);
                 var currentSection2 = NextSection(x2);
@@ -75,16 +75,13 @@ namespace Nota.Site.Generator
                 if (isNumber1 && !isNumber2)
                     return -1;
 
-                if (isNumber1)
-                {
+                if (isNumber1) {
                     var number1 = int.Parse(currentSection1);
                     var number2 = int.Parse(currentSection2);
                     var comparation = number1.CompareTo(number2);
                     if (comparation != 0)
                         return comparation;
-                }
-                else
-                {
+                } else {
                     var comperation = currentSection1.CompareTo(currentSection2, StringComparison.InvariantCultureIgnoreCase);
                     if (comperation != 0)
                         return comperation;
@@ -103,8 +100,7 @@ namespace Nota.Site.Generator
             {
                 bool isDigit = char.IsDigit(str[0]);
 
-                for (int i = 1; i < str.Length; i++)
-                {
+                for (int i = 1; i < str.Length; i++) {
                     bool currentIsDigit = char.IsDigit(str[i]);
                     if (currentIsDigit == isDigit)
                         continue;
