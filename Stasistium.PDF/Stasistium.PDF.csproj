@@ -11,7 +11,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="NHyphenator" Version="2.0.0" />
-		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.264" />
+		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.269" />
 
 	</ItemGroup>
 </Project>

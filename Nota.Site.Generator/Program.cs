@@ -241,7 +241,7 @@ namespace Nota.Site.Generator
                     CompressCache = true,
                     Refresh = true,
                     BreakOnError = System.Diagnostics.Debugger.IsAttached,
-                    CheckUniqueID = false
+                    CheckUniqueID = true
                 };
 
 
@@ -283,7 +283,6 @@ namespace Nota.Site.Generator
                     .CacheDocument("branchedDocuments", c => c
                      .GroupBy(x => x.Value.FrindlyName,
                      (key, input) => DocumentsForBranch(input, key, editUrl), "Select Content Files from Ref")
-                        .EmbededXmp()
                     ).Debug("files")
 
                     ;
@@ -338,7 +337,7 @@ namespace Nota.Site.Generator
               ;
 
 
-                var removedDoubles = comninedFiles.Where(x => IsImage(x))
+                var removedDoubleImages = comninedFiles.Where(x => IsImage(x))
                      .Merge(imageData, (file, image) =>
                      {
                          var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
@@ -353,8 +352,9 @@ namespace Nota.Site.Generator
                     .GroupBy(
                     x =>
                     {
-                        using (var stream = x.Value)
-                            return context.GetHashForStream(stream);
+                        // using (var stream = x.Value)
+                        //     return context.GetHashForStream(stream);
+                        return x.Hash;
                     },
                     (key, input) =>
                     {
@@ -368,6 +368,7 @@ namespace Nota.Site.Generator
                              foreach (var item in x.Skip(1)) {
                                  var metadata = item.Metadata.TryGetValue<ImageReferences>();
                                  if (metadata is null) {
+
                                      metadata = new ImageReferences()
                                      {
                                          References = new[] {new ImageReference() {
@@ -397,12 +398,21 @@ namespace Nota.Site.Generator
                     ;
 
 
-                var combinedFiles = comninedFiles.Merge(removedDoubles.ListTransform(x =>
+                var combinedFiles = comninedFiles
+                // .Where(x=>!IsImage(x)) // remove the images since we will get those from removed DoublesImages
+                .Merge(removedDoubleImages.ListTransform(x =>
                 {
                     //var l = x.Select(y => y).ToArray();
                     return context.CreateDocument(x, context.GetHashForObject(x), "list-of-doubles");
-                }), CombineFiles).Where(x => !x.Id.StartsWith("TO_REMOVE"))
-                  .Concat(removedDoubles);
+                }), CombineFiles)
+                .Where(x => !x.Id.StartsWith("TO_REMOVE"))
+                      .Merge(imageData, (file, image) =>
+                     {
+                             return file.With(file.Metadata.AddOrUpdate(image.Value));
+                         
+                     })
+                //   .Concat(removedDoubleImages)
+                ;
 
 
 
@@ -412,22 +422,25 @@ namespace Nota.Site.Generator
 
 
                 var licesnseFIles = files
+                
                     .Where(x => FileCanHasLicense(x))
-                 //.Merge(imageData, (file, image) =>
-                 //{
-                 //    var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
-                 //    if (references.Any())
-                 //    {
-                 //        var newData = new ImageReferences()
-                 //        {
-                 //            References = references.ToArray()
-                 //        };
-                 //        return file.With(file.Metadata.Add(newData));
-                 //    }
-                 //    else return file;
-                 //})
+//                  .Merge(imageData, (file, image) =>
+//                  {
+//                     var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
+//                     if (references.Any())
+//                     {
+// Console.WriteLine($"found e\t{references.Count()}\timages");
+//                         var newData = new ImageReferences()
+//                         {
+//                             References = references.ToArray()
+//                         };
+//                         return file.With(file.Metadata.Add(newData));
+//                     }
+//                     else return file;
+//                  })
 
-                 //.EmbededXmp()
+                //  .EmbededXmp()
+                 
 
 
                  //.Select(x =>
@@ -436,7 +449,6 @@ namespace Nota.Site.Generator
                  .Where(x => x.Metadata.TryGetValue<XmpMetadata>() != null)
                     .ListTransform(z =>
                     {
-
                         var metadataFile = new LicencedFiles()
                         {
 
@@ -459,7 +471,10 @@ namespace Nota.Site.Generator
 
 
                 var staticFiles = staticFiles2
-                    .Merge(licesnseFIles, (file, value) => file.With(file.Metadata.Add(value.Value)), "Merge licenses with static files")
+                    .Merge(licesnseFIles, (file, value) =>
+                    {
+                        return file.With(file.Metadata.Add(value.Value));
+                    }, "Merge licenses with static files")
                     .Merge(allBooks, (file, value) => file.With(file.Metadata.Add(value.Value)))
                     .If(x => Path.GetExtension(x.Id) == ".cshtml")
                         .Then(x => x
@@ -495,7 +510,7 @@ namespace Nota.Site.Generator
                 var schemaFiles = schemaRepo
 
                      .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))))
-                     .Files(true)
+                     .Files(true,name : "Schema Repo to Files")
                      .Where(x => System.IO.Path.GetExtension(x.Id) != ".md")
                      .ToText()
                         .Select(y =>
@@ -582,7 +597,10 @@ namespace Nota.Site.Generator
         private static IDocument<Stream> CombineFiles(IDocument<Stream> input, IDocument<ImmutableList<IDocument<Stream>>> removed)
         {
             var context = input.Context;
-            var removedDocuments = removed.Value.Select(y => y.Metadata.TryGetValue<ImageReferences>()).Where(x => x != null).SelectMany(x => x.References).Select(x => x.ReferencedId);
+            var removedDocuments = removed.Value.Select(y => y.Metadata.TryGetValue<ImageReferences>())
+            .Where(x => x != null)
+            .SelectMany(x => x.References)
+            .Select(x => x.ReferencedId);
             if (removedDocuments.Contains(input.Id))
                 return input.WithId($"TO_REMOVE{input.Id}");
 
@@ -682,6 +700,8 @@ namespace Nota.Site.Generator
             var contentFiles = input
            .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
            .Files(addGitMetadata: true, name: "Read Files from Git (Content)")
+                        .XMP()
+
            .Sidecar<BookMetadata>(".metadata")
                //.Select(input2 =>
                //    input2
