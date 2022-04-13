@@ -126,7 +126,7 @@ namespace Stasistium.PDF
 
 
 
-                        AppndText(text, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine);
+                        //AppndText(text, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine);
 
                     }
                 }
