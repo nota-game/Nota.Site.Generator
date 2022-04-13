@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\dependencys\PDFsharp\src\PdfSharp\PdfSharp.csproj" />
+    <ProjectReference Include="..\Nota.Site.Generator\Nota.Site.Generator.csproj" />
+  </ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="NHyphenator" Version="2.0.0" />
+		<PackageReference Include="Stasistium.Markdown" Version="0.1.0-alpha.264" />
+
+	</ItemGroup>
+</Project>
