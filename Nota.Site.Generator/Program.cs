@@ -76,6 +76,16 @@ namespace Nota.Site.Generator
             return IsImage(document.Id);
         }
 
+
+        static bool CheckLicense(IDocument<Stream> x)
+        {
+            if (FileCanHasLicense(x) && x.Metadata.TryGetValue<XmpMetadata>() == null) {
+                x.Context.Logger.Error($"Remove {x.Id} because of missing license");
+                return false;
+            }
+            return true;
+        }
+
         public static bool IsMeta(string document)
         {
             return Path.GetExtension(document) == ".meta";
@@ -253,8 +263,8 @@ namespace Nota.Site.Generator
                 //.StreamToText(name: "actual to text for scss");
 
                 var staticFiles2 = staticFilesInput
-                       //.If
-
+                    //.If
+                    .XMP()
                        //;
 
                        .If(x => Path.GetExtension(x.Id) == ".scss",
@@ -423,30 +433,8 @@ namespace Nota.Site.Generator
 
 
                 var licesnseFIles = files
+                .Concat(staticFiles2)
 
-                    .Where(x => FileCanHasLicense(x))
-                 //                  .Merge(imageData, (file, image) =>
-                 //                  {
-                 //                     var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
-                 //                     if (references.Any())
-                 //                     {
-                 // Console.WriteLine($"found e\t{references.Count()}\timages");
-                 //                         var newData = new ImageReferences()
-                 //                         {
-                 //                             References = references.ToArray()
-                 //                         };
-                 //                         return file.With(file.Metadata.Add(newData));
-                 //                     }
-                 //                     else return file;
-                 //                  })
-
-                 //  .EmbededXmp()
-
-
-
-                 //.Select(x =>
-                 //    x.EmbededXmp()
-                 //)
                  .Where(x => x.Metadata.TryGetValue<XmpMetadata>() != null)
                     .ListTransform(z =>
                     {
@@ -534,13 +522,17 @@ namespace Nota.Site.Generator
                 var rendered2 = rendered
                     ;
 
+
+
                 rendered2
                    //.Select(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                    .Concat(schemaFiles)
                    .Concat(staticFiles)
+                    .Where(x => CheckLicense(x))
+
                    .If(IsHtml).Then(x => x.DownloadExternals())
                    .Else(x => x)
-                   .DownloadExternals()
+                //    .DownloadExternals()
                    .Persist(new DirectoryInfo(output))
                    ;
 
@@ -959,6 +951,8 @@ namespace Nota.Site.Generator
                 && extension != ".cshtml"
                 && extension != ".css"
                 && extension != ".scss"
+                && extension != ".xsd"
+                && extension != ".xml"
                 && extension != ".js"
                 && extension != ".meta"
                 && extension != ".md"
