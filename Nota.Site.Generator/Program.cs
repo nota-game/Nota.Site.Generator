@@ -880,6 +880,7 @@ namespace Nota.Site.Generator
 
 
                      var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+
                      var newReferences = x.Metadata.GetValue<ImageReferences>().References
                          .Select(y =>
                          {
@@ -887,6 +888,7 @@ namespace Nota.Site.Generator
                              {
                                  ReferencedId = y.ReferencedId,
                                  Document = NotaPath.Combine(prefix, key.Value, y.Document),
+                                 Book = key.Value,
                                  Version = x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion,
                                  Header = y.Header
                              };
