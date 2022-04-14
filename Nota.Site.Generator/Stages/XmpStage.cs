@@ -75,6 +75,8 @@ namespace Nota.Site.Generator.Stages
 
                 var culture = new System.Globalization.CultureInfo("de-de");
 
+                var title = ToSearchLanguage("dc:title", culture);
+
                 var license = ToSearchLanguage("dc:rights", culture)
                     ?? ToSearchLanguage("xmpRights:UsageTerms", culture)
                     ?? ToSearchLanguage("cc:license", culture);
@@ -94,7 +96,7 @@ namespace Nota.Site.Generator.Stages
                     return file;
                 }
 
-                return file.With(file.Metadata.Add(new XmpMetadata(creator, license, rightsReserved)));
+                return file.With(file.Metadata.Add(new XmpMetadata(title, creator, license, rightsReserved)));
 
                 string? ToSearch(string toSearch)
                 {
@@ -254,9 +256,10 @@ namespace Nota.Site.Generator.Stages
 
     public class XmpMetadata
     {
-        public XmpMetadata(){}
-        public XmpMetadata(string[]? creator, string? license, bool? rightsReserved)
+        public XmpMetadata() { }
+        public XmpMetadata(string? title, string[]? creator, string? license, bool? rightsReserved)
         {
+            this.Title = title;
             this.Creators = creator;
             this.License = license;
             this.RightsReserved = rightsReserved;
@@ -264,6 +267,7 @@ namespace Nota.Site.Generator.Stages
 
         public bool? RightsReserved { get; }
 
+        public string? Title { get; }
         public string? License { get; }
 
         public string[]? Creators { get; }
