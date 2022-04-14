@@ -24,6 +24,7 @@ namespace Nota.Site.Generator.Stages
 
         public GetReferenceLocationStage(IGeneratorContext context, string? name = null) : base(context, name)
         {
+            
         }
 
         protected override Task<ImmutableList<IDocument<MarkdownDocument>>> Work(ImmutableList<IDocument<MarkdownDocument>> input, OptionToken options)
@@ -122,7 +123,22 @@ namespace Nota.Site.Generator.Stages
     {
         public string ReferencedId { get; set; }
         public string Document { get; set; }
+        public BookVersion Version { get; set; }
         public string Header { get; set; }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is ImageReference reference &&
+                   ReferencedId == reference.ReferencedId &&
+                   Document == reference.Document &&
+                   Version.Equals(reference.Version) &&
+                   Header == reference.Header;
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(ReferencedId, Document, Version, Header);
+        }
     }
 
     public class ImageReferences

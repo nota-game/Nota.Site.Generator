@@ -23,6 +23,7 @@ using AngleSharp.Dom;
 using IDocument = Stasistium.Documents.IDocument;
 using LibGit2Sharp;
 using System.Reflection;
+using AdaptMark.Parsers.Markdown.Inlines;
 
 namespace Nota.Site.Generator
 {
@@ -352,9 +353,9 @@ namespace Nota.Site.Generator
                     .GroupBy(
                     x =>
                     {
-                        // using (var stream = x.Value)
-                        //     return context.GetHashForStream(stream);
-                        return x.Hash;
+                        // Use file hash. Document Hash has also metadata
+                        using (var stream = x.Value)
+                            return context.GetHashForStream(stream);
                     },
                     (key, input) =>
                     {
@@ -365,7 +366,7 @@ namespace Nota.Site.Generator
 
                              var doc = x.First();
                              doc = doc.WithId(key.Single().Value + NotaPath.GetExtension(doc.Id));
-                             foreach (var item in x.Skip(1)) {
+                             foreach (var item in x) {
                                  var metadata = item.Metadata.TryGetValue<ImageReferences>();
                                  if (metadata is null) {
 
@@ -378,7 +379,7 @@ namespace Nota.Site.Generator
                                  }
                                  doc = doc.With(doc.Metadata.AddOrUpdate(metadata, (oldvalue, newvalue) => new ImageReferences()
                                  {
-                                     References = oldvalue.References.Concat(newvalue.References).ToArray()
+                                     References = oldvalue?.References.Concat(newvalue.References).Distinct().ToArray() ?? newvalue.References
                                  }));
                              }
 
@@ -408,10 +409,10 @@ namespace Nota.Site.Generator
                 .Where(x => !x.Id.StartsWith("TO_REMOVE"))
                       .Merge(imageData, (file, image) =>
                      {
-                             return file.With(file.Metadata.AddOrUpdate(image.Value));
-                         
+                         return file.With(file.Metadata.AddOrUpdate(image.Value));
+
                      })
-                //   .Concat(removedDoubleImages)
+                   .Concat(removedDoubleImages)
                 ;
 
 
@@ -422,25 +423,25 @@ namespace Nota.Site.Generator
 
 
                 var licesnseFIles = files
-                
-                    .Where(x => FileCanHasLicense(x))
-//                  .Merge(imageData, (file, image) =>
-//                  {
-//                     var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
-//                     if (references.Any())
-//                     {
-// Console.WriteLine($"found e\t{references.Count()}\timages");
-//                         var newData = new ImageReferences()
-//                         {
-//                             References = references.ToArray()
-//                         };
-//                         return file.With(file.Metadata.Add(newData));
-//                     }
-//                     else return file;
-//                  })
 
-                //  .EmbededXmp()
-                 
+                    .Where(x => FileCanHasLicense(x))
+                 //                  .Merge(imageData, (file, image) =>
+                 //                  {
+                 //                     var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
+                 //                     if (references.Any())
+                 //                     {
+                 // Console.WriteLine($"found e\t{references.Count()}\timages");
+                 //                         var newData = new ImageReferences()
+                 //                         {
+                 //                             References = references.ToArray()
+                 //                         };
+                 //                         return file.With(file.Metadata.Add(newData));
+                 //                     }
+                 //                     else return file;
+                 //                  })
+
+                 //  .EmbededXmp()
+
 
 
                  //.Select(x =>
@@ -510,7 +511,7 @@ namespace Nota.Site.Generator
                 var schemaFiles = schemaRepo
 
                      .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))))
-                     .Files(true,name : "Schema Repo to Files")
+                     .Files(true, name: "Schema Repo to Files")
                      .Where(x => System.IO.Path.GetExtension(x.Id) != ".md")
                      .ToText()
                         .Select(y =>
@@ -806,7 +807,7 @@ namespace Nota.Site.Generator
 
             var insertedMarkdown = input
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
-                .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF")
+                .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF xlsx")
                         .Then((x, _) => x
                         .CacheDocument("excelCache", y => y
                         .ExcelToMarkdownText(true)
@@ -825,6 +826,22 @@ namespace Nota.Site.Generator
 
                 .Markdown(GenerateMarkdownDocument, name: "Markdown Content")
                     .YamlMarkdownToDocumentMetadata<OrderMarkdownMetadata>()
+                    .CrossJoin(key, (x, key) =>
+                    {
+
+                        var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                        var bookPath = NotaPath.Combine(prefix, key.Value);
+
+                        var imageBlocks = x.Value.GetBlocksRecursive()
+                                                   .OfType<IInlineContainer>()
+                                                   .SelectMany(x => x.GetInlineRecursive())
+                                                   .OfType<ImageInline>();
+                        foreach (var item in imageBlocks) {
+                            item.Url = NotaPath.Combine(bookPath, NotaPath.GetFolder(x.Id), item.Url);
+                            Console.WriteLine($" {x.Id} -> {item.Url}");
+                        }
+                        return x;
+                    })
                 .InsertMarkdown()
                 ;
 
@@ -868,8 +885,9 @@ namespace Nota.Site.Generator
                          {
                              return new ImageReference()
                              {
-                                 ReferencedId = NotaPath.Combine(prefix, key.Value, y.ReferencedId),
+                                 ReferencedId = y.ReferencedId,
                                  Document = NotaPath.Combine(prefix, key.Value, y.Document),
+                                 Version = x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion,
                                  Header = y.Header
                              };
 
