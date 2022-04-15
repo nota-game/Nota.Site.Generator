@@ -102,7 +102,7 @@ namespace Nota.Site.Generator
         {
 
         }
-        public BookMetadata(string? location = null, string? beginning = null, BookVersion version = default)
+        public BookMetadata(string location, string beginning, BookVersion version)
         {
             this.Location = location;
             this.Beginning = beginning;
@@ -129,7 +129,7 @@ namespace Nota.Site.Generator
         /// <summary>
         /// An optional abbreviation.
         /// </summary>
-        public string? Abbr => $"{this.BookType.ToId()}{this.Number} ({this.Version})";
+        public string Abbr => $"{this.BookType.ToId()}{this.Number} ({this.Version})";
         /// <summary>
         /// The Abstract of this book formated as markdown
         /// </summary>

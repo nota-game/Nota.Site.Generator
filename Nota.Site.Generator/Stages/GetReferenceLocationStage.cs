@@ -124,7 +124,7 @@ namespace Nota.Site.Generator.Stages
         public string ReferencedId { get; set; }
         public string Document { get; set; }
         public BookVersion Version { get; set; }
-        public string Book { get; set; }
+        public BookMetadata Book { get; set; }
         public string Header { get; set; }
 
         public override bool Equals(object? obj)

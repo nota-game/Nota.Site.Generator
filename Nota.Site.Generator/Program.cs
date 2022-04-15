@@ -867,6 +867,7 @@ namespace Nota.Site.Generator
                             .GetReferenceLocation();
 
             var preparedForRender = referenceLocation
+                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
                 .CrossJoin(key, (x, key) =>
                  {
 
@@ -876,12 +877,16 @@ namespace Nota.Site.Generator
                      var newReferences = x.Metadata.GetValue<ImageReferences>().References
                          .Select(y =>
                          {
+                             BookVersion calculatedVersion = x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion;
+                             BookMetadata bookMetadata = x.Metadata.GetValue<BookMetadata>();
+
+                             string DocumentId = NotaPath.Combine(prefix, key.Value, y.Document);
                              return new ImageReference()
                              {
                                  ReferencedId = y.ReferencedId,
-                                 Document = NotaPath.Combine(prefix, key.Value, y.Document),
-                                 Book = key.Value,
-                                 Version = x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion,
+                                 Document = DocumentId,
+                                 Book = bookMetadata,
+                                 Version = calculatedVersion,
                                  Header = y.Header
                              };
 
@@ -927,7 +932,7 @@ namespace Nota.Site.Generator
 
             var stiched = concated
                 .CrossJoin(key, (x, key) => x.WithId($"{key.Value}/{x.Id}"), "Stitch corssJoin")
-                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
+                // .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
                 .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
 
 

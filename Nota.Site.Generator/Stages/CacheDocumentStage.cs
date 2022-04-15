@@ -64,7 +64,7 @@ namespace Nota.Site.Generator.Stages
                             return container;
                         }
                     } catch (System.Exception e) {
-                        Context.Logger.Error($"Faild to load cache {e.Message}");
+                        Context.Logger.Error($"Faild to load cache {e.Message} ({e.GetType()}) {e.ToString()}");
                     }
                 }
                 if (result is null) {
@@ -139,7 +139,8 @@ namespace Nota.Site.Generator.Stages
                 if (fileInfo.Exists && Nota.UseCache) {
                     try {
                         using var stream = fileInfo.OpenRead();
-                        result = (await JsonSerelizer.Load<(byte[] value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream))
+                        (byte[] value, string id, string hash, Dictionary<Type, object> metadata)[] values = await JsonSerelizer.Load<(byte[] value, string id, string hash, Dictionary<Type, object> metadata)[]>(stream);
+                        result = values
 
                             .Select(x => this.Context.CreateDocument<Stream>(null!, x.hash, x.id, ToContainer(x.metadata)).With(() => new MemoryStream(x.value) as Stream, x.hash))
                             .ToImmutableList();
@@ -153,7 +154,7 @@ namespace Nota.Site.Generator.Stages
                             return container;
                         }
                     } catch (System.Exception e) {
-                        Context.Logger.Error($"Faild to load cache {e.Message}");
+                        Context.Logger.Error($"Faild to load cache {e.Message} ({e.GetType()}) {e.ToString()}");
                     }
                 }
                 if (result is null) {
@@ -533,8 +534,16 @@ namespace Nota.Site.Generator.Stages
             }
 
             // Fill Objects
+            // do it twice so we also get the later populated structs
             for (int i = json.Count - 1; i >= 0; i--)
-            //for (int i = 0; i < json.Count; i++)
+                PopulateProperties(json, deserelizedObjects, i);
+            for (int i = 0; i < json.Count; i++) {
+                PopulateProperties(json, deserelizedObjects, i);
+            }
+
+            return (T)deserelizedObjects[0];
+
+            static void PopulateProperties(JArray json, object[] deserelizedObjects, int i)
             {
                 var entry = json[i];
 
@@ -643,7 +652,10 @@ namespace Nota.Site.Generator.Stages
                 } else if (entry["elements"] is JArray jsonElements) {
                     var implementedInterfaces = new HashSet<Type>(type.GetInterfaces().Where(x => x.IsGenericType).Select(x => x.GetGenericTypeDefinition()).Concat(type.GetInterfaces().Where(x => !x.IsGenericType)));
 
-                    if (currentObject.GetType().Name.Contains("Builder")) {
+                    if (currentObject.GetType().IsGenericType && currentObject.GetType().GetGenericTypeDefinition() == typeof(ImmutableList<>)) {
+                        // continue;
+                        // it is currently not supported to fill an imutable list twice...
+                    } else if (currentObject.GetType().Name.Contains("Builder")) {
 
                         var listType = currentObject.GetType();
                         var addMethod = listType.GetMethod("Add");
@@ -707,7 +719,9 @@ namespace Nota.Site.Generator.Stages
 
                     var mapping = type.GetInterfaceMap(interfaceType);
 
-                    var addMethod = mapping.TargetMethods.Where(x => x.GetParameters().Length == 2).First(x => x.Name == nameof(IDictionary<object, object>.Add));
+                    var setMethod = mapping.TargetMethods.Where(x => x.GetParameters().Length == 2).First(x => x.Name == "set_Item");
+
+
 
                     var genericArguments = interfaceType.GetGenericArguments();
                     var keyType = genericArguments[0];
@@ -728,7 +742,7 @@ namespace Nota.Site.Generator.Stages
                         var key = GetValue(keyWrapper, keyType);
                         var value = GetValue(valueWrapper, valueType);
 
-                        addMethod.Invoke(currentObject, new object?[] { key, value });
+                        setMethod.Invoke(currentObject, new object?[] { key, value });
 
                     }
                 } else if (entry["tuple"] is JArray jsonTuple) {
@@ -756,10 +770,7 @@ namespace Nota.Site.Generator.Stages
                 } else {
                     throw new NotSupportedException();
                 }
-
             }
-
-            return (T)deserelizedObjects[0];
         }
 
 
