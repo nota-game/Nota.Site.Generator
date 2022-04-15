@@ -797,8 +797,12 @@ namespace Nota.Site.Generator
                 .Markdown(GenerateMarkdownDocument)
                 .YamlMarkdownToDocumentMetadata<BookMetadata>();
 
-            Stasistium.Stages.IStageBaseOutput<Stream> input1 = input;
-            var insertedMarkdown = input1
+             var inputWithBookData = input
+                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
+                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
+
+
+            var insertedMarkdown = inputWithBookData 
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                 .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF xlsx")
                         .Then((x, _) => x
@@ -856,7 +860,7 @@ namespace Nota.Site.Generator
                 ;
 
 
-            var nonMarkdown = input
+            var nonMarkdown = inputWithBookData 
                 .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
 
 
@@ -878,6 +882,7 @@ namespace Nota.Site.Generator
                          .Select(y =>
                          {
                              BookVersion calculatedVersion = x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion;
+                             BookMetadata bookMetadata2 = x.Metadata.TryGetValue<BookMetadata>();
                              BookMetadata bookMetadata = x.Metadata.GetValue<BookMetadata>();
 
                              string DocumentId = NotaPath.Combine(prefix, key.Value, y.Document);
