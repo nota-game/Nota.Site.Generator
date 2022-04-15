@@ -536,14 +536,18 @@ namespace Nota.Site.Generator.Stages
             // Fill Objects
             // do it twice so we also get the later populated structs
             for (int i = json.Count - 1; i >= 0; i--)
-                PopulateProperties(json, deserelizedObjects, i);
+                PopulateProperties(json, deserelizedObjects, i, true);
             for (int i = 0; i < json.Count; i++) {
-                PopulateProperties(json, deserelizedObjects, i);
+                PopulateProperties(json, deserelizedObjects, i, true);
             }
+            for (int i = json.Count - 1; i >= 0; i--)
+                PopulateProperties(json, deserelizedObjects, i, false);
+
+
 
             return (T)deserelizedObjects[0];
 
-            static void PopulateProperties(JArray json, object[] deserelizedObjects, int i)
+            static void PopulateProperties(JArray json, object[] deserelizedObjects, int i, bool onlyStructs)
             {
                 var entry = json[i];
 
@@ -553,6 +557,8 @@ namespace Nota.Site.Generator.Stages
 
 
                 var type = Type.GetType(typeName)!; // Type wasn't null the first time, so this time it will also be not null.
+                if (onlyStructs && !type.IsValueType)
+                    return;
                 var currentObject = deserelizedObjects[i];
 
                 object? GetValue(ValueWrapper valueWrapper, Type targetType)

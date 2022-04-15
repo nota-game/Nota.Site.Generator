@@ -797,12 +797,8 @@ namespace Nota.Site.Generator
                 .Markdown(GenerateMarkdownDocument)
                 .YamlMarkdownToDocumentMetadata<BookMetadata>();
 
-            var inputWithBookData = input
-                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
-                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
-
-
-            var insertedMarkdown = inputWithBookData
+            Stasistium.Stages.IStageBaseOutput<Stream> input1 = input;
+            var insertedMarkdown = input1
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                 .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF xlsx")
                         .Then((x, _) => x
@@ -860,7 +856,7 @@ namespace Nota.Site.Generator
                 ;
 
 
-            var nonMarkdown = inputWithBookData
+            var nonMarkdown = input
                 .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
 
 
