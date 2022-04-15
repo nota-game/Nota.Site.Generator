@@ -797,7 +797,12 @@ namespace Nota.Site.Generator
                 .Markdown(GenerateMarkdownDocument)
                 .YamlMarkdownToDocumentMetadata<BookMetadata>();
 
-            var insertedMarkdown = input
+            var inputWithBookData = input
+                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
+                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
+
+
+            var insertedMarkdown = inputWithBookData
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                 .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF xlsx")
                         .Then((x, _) => x
@@ -855,7 +860,7 @@ namespace Nota.Site.Generator
                 ;
 
 
-            var nonMarkdown = input
+            var nonMarkdown = inputWithBookData
                 .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
 
 
@@ -867,7 +872,6 @@ namespace Nota.Site.Generator
                             .GetReferenceLocation();
 
             var preparedForRender = referenceLocation
-                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
                 .CrossJoin(key, (x, key) =>
                  {
 
@@ -932,8 +936,7 @@ namespace Nota.Site.Generator
 
             var stiched = concated
                 .CrossJoin(key, (x, key) => x.WithId($"{key.Value}/{x.Id}"), "Stitch corssJoin")
-                // .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
-                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
+           ;
 
 
 
