@@ -8,6 +8,7 @@ using Nota.Site.Generator.Markdown.Blocks;
 using System.Collections.Generic;
 using System;
 using System.Linq;
+using AdaptMark.Markdown.Blocks;
 
 namespace Nota.Site.Generator.Stages
 {
@@ -121,14 +122,9 @@ namespace Nota.Site.Generator.Stages
                             break;
                         }
 
-                    case SoureReferenceBlock soureReferenceBlock:
-                        {
-                            foreach (var item in DeepCopy(context, soureReferenceBlock.Blocks, pathResolver, lookup))
-                                yield return item;
-                            break;
-                        }
 
-                    case SideNote b:
+
+                    case IBlockContainer b:
                         {
                             foreach (var item in DeepCopy(context, b.Blocks, pathResolver, lookup))
                                 yield return item;

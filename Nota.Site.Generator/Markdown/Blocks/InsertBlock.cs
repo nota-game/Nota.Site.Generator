@@ -158,6 +158,11 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     {
                         return new SideNote(b.Id, b.SideNoteType, b.Distributions, this.DeepCopy(b.Blocks));
                     }
+        
+                case DivBlock d:
+                    {
+                        return new DivBlock(d.CssClass, this.DeepCopy(d.Blocks));
+                    }
 
                 default:
                     throw new NotSupportedException($"Block of type {block.GetType()} is not supported");

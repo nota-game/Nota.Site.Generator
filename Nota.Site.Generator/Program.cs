@@ -1131,6 +1131,7 @@ namespace Nota.Site.Generator
                             .AddBlockParser<Blocks.LinkReferenceBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.InsertBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.ChapterHeaderBlock.Parser>()
+                            .AddBlockParser<Markdown.Blocks.DivBlock.Parser>()
                             .AddBlockParser<Markdown.Blocks.YamlBlock<OrderMarkdownMetadata>.Parser>()
                             .AddBlockParser<Markdown.Blocks.YamlBlock<BookMetadata>.Parser>()
                             .AddBlockParser<Markdown.Blocks.SideNote.Parser>()

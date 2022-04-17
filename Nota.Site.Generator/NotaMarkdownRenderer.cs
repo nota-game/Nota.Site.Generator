@@ -19,14 +19,12 @@ namespace Nota.Site.Generator
 
         protected override void Render(StringBuilder builder, MarkdownBlock block)
         {
-            switch (block)
-            {
+            switch (block) {
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
                     builder.Append($"<div class=\"edit-box\">");
                     var reffData = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitRefMetadata>();
                     var book = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<Book>();
-                    if (this.EditUrl is not null && reffData is not null && book is not null)
-                    {
+                    if (this.EditUrl is not null && reffData is not null && book is not null) {
 
                         builder.Append($"<span><a href=\"");
                         builder.Append(this.EditUrl);
@@ -42,8 +40,7 @@ namespace Nota.Site.Generator
                         builder.Append("\" target=\"_blank\" >Bearbeiten</a>");
                     }
                     var commitDetails = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitMetadata>();
-                    if (commitDetails != null)
-                    {
+                    if (commitDetails != null) {
                         var date = commitDetails.FileCommits.First().Author.Date;
 
                         builder.Append("<span class=\"timecode\" timecode=\"");
@@ -65,8 +62,7 @@ namespace Nota.Site.Generator
                     builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
                     var id = header.ChapterId ?? GetHeaderText(header);
                     id = id.Replace(' ', '-');
-                    if (id.Length > 0)
-                    {
+                    if (id.Length > 0) {
                         builder.Append(" id=\"");
                         builder.Append(id);
                         builder.Append("\" ");
@@ -88,20 +84,23 @@ namespace Nota.Site.Generator
 
                     break;
 
+                case Markdown.Blocks.DivBlock div:
+                    builder.Append($"<div class=\"{div.CssClass}\" >");
+                    this.Render(builder, div.Blocks);
+                    builder.Append("</div>");
+                    break;
+
                 case Markdown.Blocks.ExtendedTableBlock table:
                     builder.Append("<table>");
 
-                    if (table.HasHeader)
-                    {
+                    if (table.HasHeader) {
                         builder.Append("<thead>");
                         PrintRows(0, 1, true);
                         builder.Append("</thead>");
                         builder.Append("<tbody>");
                         PrintRows(1, table.Rows.Count, false);
                         builder.Append("</tbody>");
-                    }
-                    else
-                    {
+                    } else {
                         builder.Append("<tbody>");
                         PrintRows(0, table.Rows.Count, false);
                         builder.Append("</tbody>");
@@ -109,11 +108,9 @@ namespace Nota.Site.Generator
 
                     void PrintRows(int from, int to, bool header)
                     {
-                        for (int i = from; i < to; i++)
-                        {
+                        for (int i = from; i < to; i++) {
                             builder.Append("<tr>");
-                            for (int j = 0; j < table.Rows[i].Cells.Count; j++)
-                            {
+                            for (int j = 0; j < table.Rows[i].Cells.Count; j++) {
                                 if (i == 0 && table.HasHeader)
                                     builder.Append("<th>");
                                 else
