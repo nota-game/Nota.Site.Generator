@@ -56,10 +56,14 @@ namespace Nota.Site.Generator.Stages
 
             bool changed = false;
 
-            async Task<(string id, IDocument<Stream>? document)> TryDownloadFile(string url)
+            async Task<(string? id, IDocument<Stream>? document)> TryDownloadFile(string url)
             {
+                if (url.StartsWith("http://localhost")) {
+                    return (null, null);
+                }
+
                 if (!url.StartsWith("http")) {
-                    return (url!, null);
+                    return (url, null);
                 }
                 try {
                     IDocument<Stream>? resultDocument = null;
@@ -67,7 +71,9 @@ namespace Nota.Site.Generator.Stages
                         var data = await client.GetByteArrayAsync(url);
                         var mem = new MemoryStream(data);
                         var hash = this.Context.GetHashForStream(mem);
-                        id = hash;
+                        var extension = NotaPath.GetExtension(url);
+                        id = hash + extension;
+
                         pathlookup.Add(url, id);
                         resultDocument = this.Context.CreateDocument(null as Stream, hash, id).With(() => new MemoryStream(data), hash);
                     }
@@ -83,20 +89,27 @@ namespace Nota.Site.Generator.Stages
             foreach (var item in (document.Head?.ChildNodes as IEnumerable<INode>) ?? Array.Empty<INode>()) {
 
                 if (item is AngleSharp.Html.Dom.IHtmlLinkElement link) {
-                    if (!string.IsNullOrWhiteSpace(link.Href) && !link.Href.StartsWith("http://localhost")) {
+                    if (!string.IsNullOrWhiteSpace(link.Href)) {
                         changed = true;
-                        (link.Href, var resultDocument) = await TryDownloadFile(link.Href);
+                        var (newUrl, resultDocument) = await TryDownloadFile(link.Href);
                         if (resultDocument is not null) {
                             yield return resultDocument;
+                        }
+                        if (newUrl is not null) {
+                            link.Href = "/" + newUrl;
                         }
                     }
                 } else if (item is AngleSharp.Html.Dom.IHtmlScriptElement script) {
-                    if (!string.IsNullOrWhiteSpace(script.Source)&& !script.Source.StartsWith("http://localhost")) {
+                    if (!string.IsNullOrWhiteSpace(script.Source) && !script.Source.StartsWith("http://localhost")) {
                         changed = true;
-                        (script.Source, var resultDocument) = await TryDownloadFile(script.Source);
+                        var (newUrl, resultDocument) = await TryDownloadFile(script.Source);
                         if (resultDocument is not null) {
                             yield return resultDocument;
                         }
+                        if (newUrl is not null) {
+                            script.Source = "/" + newUrl;
+                        }
+
                     }
                 }
             }

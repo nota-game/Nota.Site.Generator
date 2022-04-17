@@ -49,24 +49,21 @@ namespace Nota.Site.Generator
 
             path1.CopyTo(array.Slice(pos));
             pos += path1.Length;
-            if (appand1)
-            {
+            if (appand1) {
                 array[pos] = '/';
                 pos++;
             }
 
             path2.CopyTo(array.Slice(pos));
             pos += path2.Length;
-            if (appand2)
-            {
+            if (appand2) {
                 array[pos] = '/';
                 pos++;
             }
 
             path3.CopyTo(array.Slice(pos));
             pos += path3.Length;
-            if (appand3)
-            {
+            if (appand3) {
                 array[pos] = '/';
                 pos++;
             }
@@ -90,15 +87,22 @@ namespace Nota.Site.Generator
         }
         public static string GetExtension(string id)
         {
+
+            var invalidPathIndex = id.IndexOfAny(new[] { '?' });
+
+            if (invalidPathIndex > 0) {
+                id = id.Substring(0, invalidPathIndex);
+            }
+
             return Path.GetExtension(id);
         }
-        
+
         public static string GetFolder(string id)
         {
             var prefixIndex = id.LastIndexOf('/');
             if (prefixIndex == -1)
-return string.Empty;
-return id[0..prefixIndex];
+                return string.Empty;
+            return id[0..prefixIndex];
         }
 
         public static string ChangeName(string id, string newNameWithoutExtension)
@@ -106,7 +110,7 @@ return id[0..prefixIndex];
             var prefixIndex = id.LastIndexOf('/');
             string prefix;
             if (prefixIndex != -1)
-                prefix = id.Substring(0, prefixIndex+1);
+                prefix = id.Substring(0, prefixIndex + 1);
             else
                 prefix = string.Empty;
 
@@ -130,13 +134,11 @@ return id[0..prefixIndex];
             var name = GetIdWithoutExtension(id);
             var extension = GetExtension(id);
             var index = extension.IndexOf('.', 1);
-            if (index > -1)
-            {
+            if (index > -1) {
                 var v = (name + extension.Substring(index));
                 return v == match;
 
-            }
-            else
+            } else
                 return name == match;
         }
 
@@ -147,8 +149,7 @@ return id[0..prefixIndex];
         // See the LICENSE file in the project root of System.Private.CoreLib.
         public static string Combine(params string[] paths)
         {
-            if (paths == null)
-            {
+            if (paths == null) {
                 throw new ArgumentNullException(nameof(paths));
             }
 
@@ -158,25 +159,19 @@ return id[0..prefixIndex];
             // We have two passes, the first calculates how large a buffer to allocate and does some precondition
             // checks on the paths passed in.  The second actually does the combination.
 
-            for (int i = 0; i < paths.Length; i++)
-            {
-                if (paths[i] == null)
-                {
+            for (int i = 0; i < paths.Length; i++) {
+                if (paths[i] == null) {
                     throw new ArgumentNullException(nameof(paths));
                 }
 
-                if (paths[i].Length == 0)
-                {
+                if (paths[i].Length == 0) {
                     continue;
                 }
 
-                if (IsPathRooted(paths[i]))
-                {
+                if (IsPathRooted(paths[i])) {
                     firstComponent = i;
                     maxSize = paths[i].Length;
-                }
-                else
-                {
+                } else {
                     maxSize += paths[i].Length;
                 }
 
@@ -187,22 +182,16 @@ return id[0..prefixIndex];
             var builder = new ValueStringBuilder(stackalloc char[260]); // MaxShortPath on Windows
             builder.EnsureCapacity(maxSize);
 
-            for (int i = firstComponent; i < paths.Length; i++)
-            {
-                if (paths[i].Length == 0)
-                {
+            for (int i = firstComponent; i < paths.Length; i++) {
+                if (paths[i].Length == 0) {
                     continue;
                 }
 
-                if (builder.Length == 0)
-                {
+                if (builder.Length == 0) {
                     builder.Append(paths[i]);
-                }
-                else
-                {
+                } else {
                     char ch = builder[builder.Length - 1];
-                    if (!IsEndingWithSeperator(builder.AsSpan()))
-                    {
+                    if (!IsEndingWithSeperator(builder.AsSpan())) {
                         builder.Append(DirectorySeparatorChar);
                     }
 
@@ -296,8 +285,7 @@ return id[0..prefixIndex];
             /// <param name="terminate">Ensures that the builder has a null char after <see cref="Length"/></param>
             public ReadOnlySpan<char> AsSpan(bool terminate)
             {
-                if (terminate)
-                {
+                if (terminate) {
                     this.EnsureCapacity(this.Length + 1);
                     this._chars[this.Length] = '\0';
                 }
@@ -310,14 +298,11 @@ return id[0..prefixIndex];
 
             public bool TryCopyTo(Span<char> destination, out int charsWritten)
             {
-                if (this._chars.Slice(0, this._pos).TryCopyTo(destination))
-                {
+                if (this._chars.Slice(0, this._pos).TryCopyTo(destination)) {
                     charsWritten = this._pos;
                     this.Dispose();
                     return true;
-                }
-                else
-                {
+                } else {
                     charsWritten = 0;
                     this.Dispose();
                     return false;
@@ -326,8 +311,7 @@ return id[0..prefixIndex];
 
             public void Insert(int index, char value, int count)
             {
-                if (this._pos > this._chars.Length - count)
-                {
+                if (this._pos > this._chars.Length - count) {
                     this.Grow(count);
                 }
 
@@ -339,15 +323,13 @@ return id[0..prefixIndex];
 
             public void Insert(int index, string? s)
             {
-                if (s == null)
-                {
+                if (s == null) {
                     return;
                 }
 
                 int count = s.Length;
 
-                if (this._pos > (this._chars.Length - count))
-                {
+                if (this._pos > (this._chars.Length - count)) {
                     this.Grow(count);
                 }
 
@@ -361,13 +343,10 @@ return id[0..prefixIndex];
             public void Append(char c)
             {
                 int pos = this._pos;
-                if ((uint)pos < (uint)this._chars.Length)
-                {
+                if ((uint)pos < (uint)this._chars.Length) {
                     this._chars[pos] = c;
                     this._pos = pos + 1;
-                }
-                else
-                {
+                } else {
                     this.GrowAndAppend(c);
                 }
             }
@@ -375,8 +354,7 @@ return id[0..prefixIndex];
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void Append(string? s)
             {
-                if (s == null)
-                {
+                if (s == null) {
                     return;
                 }
 
@@ -385,9 +363,7 @@ return id[0..prefixIndex];
                 {
                     this._chars[pos] = s[0];
                     this._pos = pos + 1;
-                }
-                else
-                {
+                } else {
                     this.AppendSlow(s);
                 }
             }
@@ -395,8 +371,7 @@ return id[0..prefixIndex];
             private void AppendSlow(string s)
             {
                 int pos = this._pos;
-                if (pos > this._chars.Length - s.Length)
-                {
+                if (pos > this._chars.Length - s.Length) {
                     this.Grow(s.Length);
                 }
 
@@ -406,14 +381,12 @@ return id[0..prefixIndex];
 
             public void Append(char c, int count)
             {
-                if (this._pos > this._chars.Length - count)
-                {
+                if (this._pos > this._chars.Length - count) {
                     this.Grow(count);
                 }
 
                 Span<char> dst = this._chars.Slice(this._pos, count);
-                for (int i = 0; i < dst.Length; i++)
-                {
+                for (int i = 0; i < dst.Length; i++) {
                     dst[i] = c;
                 }
                 this._pos += count;
@@ -424,8 +397,7 @@ return id[0..prefixIndex];
             public void Append(ReadOnlySpan<char> value)
             {
                 int pos = this._pos;
-                if (pos > this._chars.Length - value.Length)
-                {
+                if (pos > this._chars.Length - value.Length) {
                     this.Grow(value.Length);
                 }
 
@@ -437,8 +409,7 @@ return id[0..prefixIndex];
             public Span<char> AppendSpan(int length)
             {
                 int origPos = this._pos;
-                if (origPos > this._chars.Length - length)
-                {
+                if (origPos > this._chars.Length - length) {
                     this.Grow(length);
                 }
 
@@ -473,8 +444,7 @@ return id[0..prefixIndex];
 
                 char[]? toReturn = this._arrayToReturnToPool;
                 this._chars = this._arrayToReturnToPool = poolArray;
-                if (toReturn != null)
-                {
+                if (toReturn != null) {
                     ArrayPool<char>.Shared.Return(toReturn);
                 }
             }
@@ -484,8 +454,7 @@ return id[0..prefixIndex];
             {
                 char[]? toReturn = this._arrayToReturnToPool;
                 this = default; // for safety, to avoid using pooled array if this instance is erroneously appended to again
-                if (toReturn != null)
-                {
+                if (toReturn != null) {
                     ArrayPool<char>.Shared.Return(toReturn);
                 }
             }
