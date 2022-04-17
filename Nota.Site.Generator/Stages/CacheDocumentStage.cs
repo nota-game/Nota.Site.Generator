@@ -59,7 +59,7 @@ namespace Nota.Site.Generator.Stages
                         {
                             var container = Context.EmptyMetadata;
                             foreach (var (key, value) in dic) {
-                                container.Add(key, value);
+                                container = container.Add(key, value);
                             }
                             return container;
                         }
