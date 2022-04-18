@@ -24,9 +24,10 @@ namespace Nota.Site.Generator
                     builder.Append($"<div class=\"edit-box\">");
                     var reffData = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitRefMetadata>();
                     var book = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<Book>();
+                    builder.Append($"<span class='edit-info' >");
                     if (this.EditUrl is not null && reffData is not null && book is not null) {
 
-                        builder.Append($"<span><a href=\"");
+                        builder.Append($"<a href=\"");
                         builder.Append(this.EditUrl);
                         if (!this.EditUrl.EndsWith("/"))
                             builder.Append('/');
