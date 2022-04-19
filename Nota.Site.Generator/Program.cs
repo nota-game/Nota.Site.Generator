@@ -507,7 +507,7 @@ namespace Nota.Site.Generator
                             var gitData = y.Metadata.GetValue<GitRefMetadata>()!;
                             var version = gitData.CalculatedVersion;
                             var host = y.Metadata.GetValue<HostMetadata>()!.Host;
-                            var newText = hostReplacementRegex.Replace(y.Value, @$"{host}/schema/{version}/");
+                            var newText = hostReplacementRegex.Replace(y.Value, @$"{host?.TrimEnd('/')}/schema/{version}/");
                             return y.With(newText, y.Context.GetHashForString(newText));
                         })
                         .ToStream()
@@ -770,7 +770,7 @@ namespace Nota.Site.Generator
                 .Concat(dataFile.Select(x =>
                 {
                     var host = x.Metadata.GetValue<HostMetadata>()!.Host;
-                    var newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host}/schema/");
+                    var newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host?.TrimEnd('/')}/schema/");
                     var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), x.Id);
                     return x.WithId(location).With(() => newText.ToStream(), x.Context.GetHashForString(newText));
                 }))
