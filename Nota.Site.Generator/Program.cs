@@ -27,6 +27,14 @@ using AdaptMark.Parsers.Markdown.Inlines;
 
 namespace Nota.Site.Generator
 {
+    public class XmlMetaData
+    {
+        public XmlMetaData()
+        {
+            
+        }
+        public string? NamespaceVersion { get; set; }
+    }
 
     class AllDocumentsThatAreDependedOn
     {
@@ -363,7 +371,7 @@ namespace Nota.Site.Generator
                     .GroupBy(
                     x =>
                     {
-                        // Use file hash. Document Hash has also metadata
+                    // Use file hash. Document Hash has also metadata
                         using (var stream = x.Value)
                             return context.GetHashForStream(stream);
                     },
@@ -393,12 +401,12 @@ namespace Nota.Site.Generator
                                  }));
                              }
 
-                             // doc.Metadata.GetValue<ImageReferences>().References.Select(y=>
-                             // {
-                             //     var targetPath = y.ReferencedId;
-                             //     relativeTo = y.Document;
-                             //     return y;
-                             // });
+                         // doc.Metadata.GetValue<ImageReferences>().References.Select(y=>
+                         // {
+                         //     var targetPath = y.ReferencedId;
+                         //     relativeTo = y.Document;
+                         //     return y;
+                         // });
 
                              return doc;
 
@@ -413,7 +421,7 @@ namespace Nota.Site.Generator
                 // .Where(x=>!IsImage(x)) // remove the images since we will get those from removed DoublesImages
                 .Merge(removedDoubleImages.ListTransform(x =>
                 {
-                    //var l = x.Select(y => y).ToArray();
+                //var l = x.Select(y => y).ToArray();
                     return context.CreateDocument(x, context.GetHashForObject(x), "list-of-doubles");
                 }), CombineFiles)
                 .Where(x => !x.Id.StartsWith("TO_REMOVE"))
@@ -532,7 +540,7 @@ namespace Nota.Site.Generator
 
                    .If(IsHtml).Then(x => x.DownloadExternals())
                    .Else(x => x)
-                //    .DownloadExternals()
+                   //    .DownloadExternals()
                    .Persist(new DirectoryInfo(output))
                    ;
 
@@ -715,6 +723,7 @@ namespace Nota.Site.Generator
 
 
             var dataFile = contentFiles
+                .Sidecar<XmlMetaData>(".xmlmeta")
                 .Where(x => x.Id == "data/nota.xml")
                 .Single();
 
@@ -753,6 +762,10 @@ namespace Nota.Site.Generator
 
             var books = contentFiles.Where(x => x.Id.StartsWith("books/"));
             grouped = books
+
+
+
+
                 .GroupBy
                 (dataFile, x =>
                  {
@@ -769,8 +782,19 @@ namespace Nota.Site.Generator
                 .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
                 .Concat(dataFile.Select(x =>
                 {
+                    var xmlData = x.Metadata.TryGetValue<XmlMetaData>();
+                    String version;
+                    if (xmlData is null) {
+                        System.Console.WriteLine("Did not fond .xmlmeta");
+                        version = "";
+                    } else {
+                        version = xmlData.NamespaceVersion;
+                    }
+
+
+
                     var host = x.Metadata.GetValue<HostMetadata>()!.Host;
-                    var newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host?.TrimEnd('/')}/schema/");
+                    var newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host?.TrimEnd('/')}/schema/{version}/");
                     var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), x.Id);
                     return x.WithId(location).With(() => newText.ToStream(), x.Context.GetHashForString(newText));
                 }))
@@ -797,12 +821,12 @@ namespace Nota.Site.Generator
                 .Markdown(GenerateMarkdownDocument)
                 .YamlMarkdownToDocumentMetadata<BookMetadata>();
 
-             var inputWithBookData = input
-                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
-                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
+            var inputWithBookData = input
+               .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
+               .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
 
 
-            var insertedMarkdown = inputWithBookData 
+            var insertedMarkdown = inputWithBookData
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                 .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF xlsx")
                         .Then((x, _) => x
@@ -847,7 +871,7 @@ namespace Nota.Site.Generator
             var insertedDocuments = insertedMarkdown.ListTransform(x =>
             {
                 var values = x.SelectMany(y => y.Metadata.TryGetValue<DependendUponMetadata>()?.DependsOn ?? Array.Empty<string>()).Distinct().Where(z => z != null).ToArray();
-                //var context = x.First().Context;
+            //var context = x.First().Context;
                 return context.CreateDocument(values, context.GetHashForObject(values), "documentIdsThatAreInserted");
             });
 
@@ -860,7 +884,7 @@ namespace Nota.Site.Generator
                 ;
 
 
-            var nonMarkdown = inputWithBookData 
+            var nonMarkdown = inputWithBookData
                 .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
 
 
@@ -1277,5 +1301,6 @@ namespace Nota.Site.Generator
 
         public string Name { get; private set; }
     }
+
 
 }
