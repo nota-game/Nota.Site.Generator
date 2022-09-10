@@ -2,10 +2,10 @@
 using AdaptMark.Parsers.Markdown;
 using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Helpers;
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -16,14 +16,18 @@ namespace Nota.Site.Generator.Markdown.Blocks
     {
         public SideNote(string id, SideNoteType sideNoteType, IEnumerable<(string id, byte distribution)> distributions, IEnumerable<MarkdownBlock> blocks)
         {
-            if (distributions is null)
+            if (distributions is null) {
                 throw new ArgumentNullException(nameof(distributions));
-            if (blocks is null)
+            }
+
+            if (blocks is null) {
                 throw new ArgumentNullException(nameof(blocks));
-            this.Id = id ?? throw new ArgumentNullException(nameof(id));
-            this.SideNoteType = sideNoteType;
-            this.Distributions = distributions.ToImmutableArray();
-            this.Blocks = blocks.ToImmutableArray();
+            }
+
+            Id = id ?? throw new ArgumentNullException(nameof(id));
+            SideNoteType = sideNoteType;
+            Distributions = distributions.ToImmutableArray();
+            Blocks = blocks.ToImmutableArray();
         }
 
         public string Id { get; }
@@ -31,7 +35,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         public ImmutableArray<(string id, byte distribution)> Distributions { get; }
         public ImmutableArray<MarkdownBlock> Blocks { get; }
-        IReadOnlyList<MarkdownBlock> IBlockContainer.Blocks => this.Blocks.AsReadonly();
+        IReadOnlyList<MarkdownBlock> IBlockContainer.Blocks => Blocks.AsReadonly();
 
         public new class Parser : Parser<SideNote>
         {
@@ -40,154 +44,173 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
             protected override BlockParseResult<SideNote>? ParseInternal(in LineBlock markdown, int startLine, bool lineStartsNewParagraph, MarkdownDocument document)
             {
-                var firstLine = markdown[startLine];
-                var startOfTable = firstLine.IndexOfNonWhiteSpace();
-                if (startOfTable != -1 && firstLine[startOfTable] != '|')
+                ReadOnlySpan<char> firstLine = markdown[startLine];
+                int startOfTable = firstLine.IndexOfNonWhiteSpace();
+                if (startOfTable != -1 && firstLine[startOfTable] != '|') {
                     return null;
+                }
 
                 int lastend = 0;
-                var header = markdown.RemoveFromLine((l, index) =>
+                LineBlock header = markdown.RemoveFromLine((l, index) =>
                 {
-                    if (l.Length == 0)
+                    if (l.Length == 0) {
                         return (0, 0, true, true);
+                    }
 
-                    var start = l.IndexOfNonWhiteSpace();
-                    if (start == -1)
+                    int start = l.IndexOfNonWhiteSpace();
+                    if (start == -1) {
                         return (0, 0, true, true);
+                    }
 
-                    if (l[start] != '|')
+                    if (l[start] != '|') {
                         return (0, 0, true, true);
+                    }
+
                     bool hasDash = false;
                     bool allDashOrWhitespaec = true;
-                    for (int i = start + 1; i < l.Length; i++)
-                    {
-                        if (l[i] == '-')
-                        {
+                    for (int i = start + 1; i < l.Length; i++) {
+                        if (l[i] == '-') {
                             hasDash = true;
                             continue;
                         }
 
-                        if (char.IsWhiteSpace(l[i]))
+                        if (char.IsWhiteSpace(l[i])) {
                             continue;
+                        }
 
                         allDashOrWhitespaec = false;
                     }
 
-                    if (allDashOrWhitespaec && hasDash)
+                    if (allDashOrWhitespaec && hasDash) {
                         return (0, 0, true, true);
+                    }
 
-
-                    var rest = l.Slice(start + 1);
-                    var contentStart = rest.IndexOfNonWhiteSpace() + start + 1;
+                    ReadOnlySpan<char> rest = l.Slice(start + 1);
+                    int contentStart = rest.IndexOfNonWhiteSpace() + start + 1;
 
                     return (contentStart, l.Length - contentStart, false, false);
                 });
 
-                if (header.LineCount == 0)
+                if (header.LineCount == 0) {
                     return null;
+                }
 
-                var rest = markdown.SliceLines(header.LineCount);
+                LineBlock rest = markdown.SliceLines(header.LineCount);
 
-                if (rest.LineCount == 0)
+                if (rest.LineCount == 0) {
                     return null;
+                }
 
-                var seperatorLine = rest[0];
-                var nonSpaceSeperatorLine = seperatorLine.IndexOfNonWhiteSpace();
-                if (nonSpaceSeperatorLine == -1)
+                ReadOnlySpan<char> seperatorLine = rest[0];
+                int nonSpaceSeperatorLine = seperatorLine.IndexOfNonWhiteSpace();
+                if (nonSpaceSeperatorLine == -1) {
                     return null;
+                }
+
                 seperatorLine = seperatorLine.Slice(nonSpaceSeperatorLine + 1);
 
-                if (seperatorLine.Length == 0)
+                if (seperatorLine.Length == 0) {
                     return null;
+                }
 
-                for (int i = 0; i < seperatorLine.Length; i++)
-                {
-                    if (seperatorLine[i] == '-')
+                for (int i = 0; i < seperatorLine.Length; i++) {
+                    if (seperatorLine[i] == '-') {
                         continue;
+                    }
 
-                    if (char.IsWhiteSpace(seperatorLine[i]))
+                    if (char.IsWhiteSpace(seperatorLine[i])) {
                         continue;
+                    }
 
                     return null;
                 }
 
                 rest = rest.SliceLines(1);
 
-                var body = rest.RemoveFromLine((l, index) =>
+                LineBlock body = rest.RemoveFromLine((l, index) =>
                 {
-                    if (l.Length == 0)
+                    if (l.Length == 0) {
                         return (0, 0, true, true);
+                    }
 
-                    var start = l.IndexOfNonWhiteSpace();
-                    if (start == -1)
+                    int start = l.IndexOfNonWhiteSpace();
+                    if (start == -1) {
                         return (0, 0, true, true);
+                    }
 
-                    if (l[start] != '|')
+                    if (l[start] != '|') {
                         return (0, 0, true, true);
+                    }
 
-                    var rest = l.Slice(start + 1);
-                    var contentStart = rest.IndexOfNonWhiteSpace() + start + 1;
+                    ReadOnlySpan<char> rest = l.Slice(start + 1);
+
+                    int contentStart = rest.IndexOfNonWhiteSpace() == -1
+                    ? start + 1
+                    : rest.IndexOfNonWhiteSpace() + start + 1;
 
                     return (contentStart, l.Length - contentStart, false, false);
                 });
 
-                if (!Enum.TryParse<SideNoteType>(header[0].ToString(), true, out var sideNoteType))
+                if (!Enum.TryParse<SideNoteType>(header[0].ToString(), true, out SideNoteType sideNoteType)) {
                     sideNoteType = SideNoteType.Undefined;
+                }
 
-                var builder = ImmutableArray<(string id, byte distribution)>.Empty.ToBuilder();
+                ImmutableArray<(string id, byte distribution)>.Builder builder = ImmutableArray<(string id, byte distribution)>.Empty.ToBuilder();
                 string? id = null;
 
 
-                for (int i = 1; i < header.LineCount; i++)
-                {
-                    var currentLine = header[i];
-                    if (currentLine.Length == 0)
+                for (int i = 1; i < header.LineCount; i++) {
+                    ReadOnlySpan<char> currentLine = header[i];
+                    if (currentLine.Length == 0) {
                         return null;
-                    if (currentLine[0] == '[')
-                    {
-                        var closing = currentLine.FindClosingBrace();
-                        if (closing == -1)
+                    }
+
+                    if (currentLine[0] == '[') {
+                        int closing = currentLine.FindClosingBrace();
+                        if (closing == -1) {
                             return null;
+                        }
 
                         id = currentLine.Slice(1, closing - 1).ToString();
-                    }
-                    else
-                    {
-                        var toParse = currentLine;
-                        while (true)
-                        {
-                            var entryStart = toParse.IndexOfNonWhiteSpace();
+                    } else {
+                        ReadOnlySpan<char> toParse = currentLine;
+                        while (true) {
+                            int entryStart = toParse.IndexOfNonWhiteSpace();
                             toParse = toParse.Slice(entryStart);
 
-                            var end = toParse.IndexOfNexWhiteSpace();
-                            if (end == -1)
+                            int end = toParse.IndexOfNexWhiteSpace();
+                            if (end == -1) {
                                 end = toParse.Length;
+                            }
 
-                            var entry = toParse.Slice(0, end);
+                            ReadOnlySpan<char> entry = toParse.Slice(0, end);
 
-                            var collumnPos = entry.IndexOf(':');
+                            int collumnPos = entry.IndexOf(':');
 
-                            if (collumnPos == -1)
+                            if (collumnPos == -1) {
                                 return null;
+                            }
 
-                            var firstPart = entry.Slice(0, collumnPos);
-                            var seccondPart = entry.Slice(collumnPos + 1);
+                            ReadOnlySpan<char> firstPart = entry.Slice(0, collumnPos);
+                            ReadOnlySpan<char> seccondPart = entry.Slice(collumnPos + 1);
 
-                            if (!byte.TryParse(seccondPart.ToString(), out var value))
+                            if (!byte.TryParse(seccondPart.ToString(), out byte value)) {
                                 return null;
+                            }
 
                             builder.Add((firstPart.ToString(), value));
 
                             toParse = toParse.Slice(end);
-                            if (toParse.IsWhiteSpace())
+                            if (toParse.IsWhiteSpace()) {
                                 break;
+                            }
                         }
                     }
                 }
 
-                
-                var blocks = document.ParseBlocks(body);
-                var result = new SideNote(id ?? string.Empty, sideNoteType, builder.ToImmutable(), blocks);
+
+                List<MarkdownBlock> blocks = document.ParseBlocks(body);
+                SideNote result = new SideNote(id ?? string.Empty, sideNoteType, builder.ToImmutable(), blocks);
 
                 return BlockParseResult.Create(result, startLine, header.LineCount + 1 + body.LineCount);
             }
@@ -197,13 +220,14 @@ namespace Nota.Site.Generator.Markdown.Blocks
 
         protected override string StringRepresentation()
         {
-            var builder = new StringBuilder();
+            StringBuilder builder = new StringBuilder();
 
-            if (this.Id != null)
-                WriteLine(this.Id);
-            WriteLine(this.SideNoteType.ToString());
-            foreach (var (id, value) in this.Distributions)
-            {
+            if (Id != null) {
+                WriteLine(Id);
+            }
+
+            WriteLine(SideNoteType.ToString());
+            foreach ((string id, byte value) in Distributions) {
                 Write(id);
                 builder.Append(' ');
                 builder.Append(value);
@@ -211,9 +235,8 @@ namespace Nota.Site.Generator.Markdown.Blocks
             }
 
             builder.AppendLine("|---");
-            var splitter = new LineSplitter(string.Join("\n\n", this.Blocks));
-            while (splitter.TryGetNextLine(out var line, out _, out _))
-            {
+            LineSplitter splitter = new LineSplitter(string.Join("\n\n", Blocks));
+            while (splitter.TryGetNextLine(out ReadOnlySpan<char> line, out _, out _)) {
                 WriteLine(line);
             }
 
