@@ -50,7 +50,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
                     return null;
                 }
 
-                int lastend = 0;
+                //int lastend = 0;
                 LineBlock header = markdown.RemoveFromLine((l, index) =>
                 {
                     if (l.Length == 0) {
@@ -229,12 +229,12 @@ namespace Nota.Site.Generator.Markdown.Blocks
             WriteLine(SideNoteType.ToString());
             foreach ((string id, byte value) in Distributions) {
                 Write(id);
-                builder.Append(' ');
-                builder.Append(value);
-                builder.AppendLine();
+                _ = builder.Append(' ');
+                _ = builder.Append(value);
+                _ = builder.AppendLine();
             }
 
-            builder.AppendLine("|---");
+            _ = builder.AppendLine("|---");
             LineSplitter splitter = new LineSplitter(string.Join("\n\n", Blocks));
             while (splitter.TryGetNextLine(out ReadOnlySpan<char> line, out _, out _)) {
                 WriteLine(line);
@@ -243,12 +243,12 @@ namespace Nota.Site.Generator.Markdown.Blocks
             void WriteLine(ReadOnlySpan<char> txt)
             {
                 Write(txt);
-                builder.AppendLine();
+                _ = builder.AppendLine();
             }
             void Write(ReadOnlySpan<char> txt)
             {
-                builder.Append("| ");
-                builder.Append(txt);
+                _ = builder.Append("| ");
+                _ = builder.Append(txt);
             }
 
 

@@ -93,12 +93,12 @@ namespace Nota.Site.Generator.Markdown
             void WriteLine(ReadOnlySpan<char> txt)
             {
                 Write(txt);
-                builder.AppendLine();
+                _ = builder.AppendLine();
             }
             void Write(ReadOnlySpan<char> txt)
             {
-                builder.Append("/ ");
-                builder.Append(txt);
+                _ = builder.Append("/ ");
+                _ = builder.Append(txt);
             }
 
 

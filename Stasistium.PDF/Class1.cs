@@ -15,101 +15,87 @@ namespace Stasistium.PDF
 
     public class Renderer
     {
-        record struct TextRender(PdfSharp.Drawing.XFont Font, PointD Start, String Text);
-        record struct ParagraphRender(IEnumerable<TextRender> Renders, double maximumWidth, int numberOfLines, IEnumerable<BlockHolder> requiredBlocks, double lineHight)
+        private record struct TextRender(PdfSharp.Drawing.XFont Font, PointD Start, string Text);
+
+        private record struct ParagraphRender(IEnumerable<TextRender> Renders, double maximumWidth, int numberOfLines, IEnumerable<BlockHolder> requiredBlocks, double lineHight)
         {
             public double calculatedHeight => numberOfLines * lineHight;
         }
-        record struct BlockHolder();
+
+        private record struct BlockHolder();
 
         public void Render(MarkdownDocument document)
         {
 
             var page = new PdfSharp.Pdf.PdfPage();
-            var doc = new PdfSharp.Pdf.PdfDocument()
-;
+            //var doc = new PdfSharp.Pdf.PdfDocument()
+            ;
             page.Size = PdfSharp.PageSize.A4;
             using var context = PdfSharp.Drawing.XGraphics.CreateMeasureContext(new PdfSharp.Drawing.XSize(210, 300), PdfSharp.Drawing.XGraphicsUnit.Millimeter, PdfSharp.Drawing.XPageDirection.Downwards);
 
 
-            RectangleD textArea = new RectangleD();
+            var textArea = new RectangleD();
             IEnumerable<RectangleD> excluded = new List<RectangleD>();
 
-            foreach (var block in document.Blocks)
-            {
+            foreach (Blocks.MarkdownBlock block in document.Blocks) {
 
                 double paragraphWidth = textArea.Width;
 
 
-                int currentLine = 0;
-                double currentIndention = 0;
+                //int currentLine = 0;
+                //double currentIndention = 0;
 
                 //double spaceWidth = context.MeasureString(" ", font).Width;
 
                 List<TextRender> renders = new();
 
-                if (block is Blocks.ParagraphBlock paragraph)
-                {
-                    foreach (var inline in paragraph.Inlines)
-                    {
+                if (block is Blocks.ParagraphBlock paragraph) {
+                    foreach (Inlines.MarkdownInline inline in paragraph.Inlines) {
 
-                        static void PrepareText(ReadOnlySpan<char> text, PdfSharp.Drawing.XFont font, PdfSharp.Drawing.XGraphics context, double paragraphWidth, List<TextRender> renders, ref double currentIndention, ref int currentLine)
-                        {
-                            var splited = text.Split();
+                        //static void PrepareText(ReadOnlySpan<char> text, PdfSharp.Drawing.XFont font, PdfSharp.Drawing.XGraphics context, double paragraphWidth, List<TextRender> renders, ref double currentIndention, ref int currentLine)
+                        //{
+                        //    SpanWordEnumerator splited = text.Split();
 
-                            while (splited.MoveNext())
-                            {
+                        //    while (splited.MoveNext()) {
 
-                                while (context.MeasureString(splited.FromStartIncludingCurrent, font).Width < paragraphWidth && splited.MoveNext())
-                                {
-                                    // take more words
-                                }
-                                if(context.MeasureString(splited.FromStartIncludingCurrent, font).Width < paragraphWidth)
-                                {
-                                    // we consumed the complete text
-                                }
-                                else
-                                {
-                                    // we took more words than fiting in the line
-                                    var wordToLong = splited.Current;
-                                    splited.MovePrevious(); // so remove the last word
-                                    // TODO: hyphnate the word
-                                }
+                        //        while (context.MeasureString(splited.FromStartIncludingCurrent, font).Width < paragraphWidth && splited.MoveNext()) {
+                        //            // take more words
+                        //        }
+                        //        if (context.MeasureString(splited.FromStartIncludingCurrent, font).Width < paragraphWidth) {
+                        //            // we consumed the complete text
+                        //        } else {
+                        //            // we took more words than fiting in the line
+                        //            ReadOnlySpan<char> wordToLong = splited.Current;
+                        //            _ = splited.MovePrevious(); // so remove the last word
+                        //            // TODO: hyphnate the word
+                        //        }
 
-                            }
-                        }
+                        //    }
+                        //}
 
                         static bool AppndText(ReadOnlySpan<char> text, PdfSharp.Drawing.XFont font, PdfSharp.Drawing.XGraphics context, double paragraphWidth, List<TextRender> renders, ref double currentIndention, ref int currentLine, bool printIfToLong = false)
                         {
-                            var measured = context.MeasureString(text, font);
+                            PdfSharp.Drawing.XSize measured = context.MeasureString(text, font);
 
-                            if (measured.Width + currentIndention < paragraphWidth || printIfToLong)
-                            {
+                            if (measured.Width + currentIndention < paragraphWidth || printIfToLong) {
                                 renders.Add(new TextRender(font, new PointD(currentIndention, currentLine * font.GetHeight()), text.ToString()));
                                 currentIndention += measured.Width;
                                 return true;
-                            }
-                            else if (!text.IsWhiteSpace() && text.Contains(' '))
-                            {
-                                var splitEnumerator = text.Split();
-                                while (splitEnumerator.MoveNext())
-                                {
-                                    if (!AppndText(splitEnumerator.Current, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine))
-                                    {
+                            } else if (!text.IsWhiteSpace() && text.Contains(' ')) {
+                                SpanWordEnumerator splitEnumerator = text.Split();
+                                while (splitEnumerator.MoveNext()) {
+                                    if (!AppndText(splitEnumerator.Current, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine)) {
                                         currentIndention = 0;
                                         currentLine++;
-                                        AppndText(splitEnumerator.Current, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine, true);
+                                        _ = AppndText(splitEnumerator.Current, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine, true);
                                     }
-                                    if (!AppndText(" ", font, context, paragraphWidth, renders, ref currentIndention, ref currentLine))
-                                    {
+                                    if (!AppndText(" ", font, context, paragraphWidth, renders, ref currentIndention, ref currentLine)) {
                                         currentIndention = 0;
                                         currentLine++;
                                     }
                                 }
                                 return true;
-                            }
-                            else
-                            {
+                            } else {
                                 //AppndText(splitEnumerator.Current, font, context, paragraphWidth, renders, ref currentIndention, ref currentLine, true);
                                 return false;
                             }
@@ -118,8 +104,7 @@ namespace Stasistium.PDF
 
                         string text;
                         PdfSharp.Drawing.XFont font;
-                        if (inline is Inlines.TextRunInline run)
-                        {
+                        if (inline is Inlines.TextRunInline run) {
                             font = new PdfSharp.Drawing.XFont("", 1, PdfSharp.Drawing.XFontStyle.Bold);
                             text = run.Text;
                         }
@@ -132,9 +117,8 @@ namespace Stasistium.PDF
                 }
             }
 
-            if (document.Blocks.First() is AdaptMark.Parsers.Markdown.Blocks.ParagraphBlock paragrap)
-            {
-                AdaptMark.Parsers.Markdown.Inlines.TextRunInline r;
+            if (document.Blocks.First() is AdaptMark.Parsers.Markdown.Blocks.ParagraphBlock paragrap) {
+                //AdaptMark.Parsers.Markdown.Inlines.TextRunInline r;
                 //paragrap.Inlines.
             }
 
@@ -153,9 +137,11 @@ namespace Stasistium.PDF
 
     public class PageMaster
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public PageMaster Base { get; }
 
         public IList<Layer> Layers { get; }
+
 
 
     }
@@ -243,7 +229,7 @@ namespace Stasistium.PDF
 
     public class Font
     {
-        IList<string> FontPriorety { get; }
+        private IList<string> FontPriorety { get; }
     }
 
     public class Layer
@@ -262,3 +248,4 @@ namespace Stasistium.PDF
 
     }
 }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.

@@ -1,9 +1,8 @@
 ﻿using Stasistium.Documents;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
 
 namespace Nota.Site.Generator
 {
@@ -19,7 +18,7 @@ namespace Nota.Site.Generator
             this.enumerable = enumerable.ToArray();
         }
 
-        public IEnumerable<BookVersion> Versions => this.enumerable;
+        public IEnumerable<BookVersion> Versions => enumerable;
     }
 
 
@@ -39,21 +38,23 @@ namespace Nota.Site.Generator
     internal class GitRefMetadata
     {
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         private GitRefMetadata()
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         {
 
         }
 
         public GitRefMetadata(GitRefStage value)
         {
-            this.Name = value.FrindlyName;
-            this.Type = value.Type;
+            Name = value.FrindlyName;
+            Type = value.Type;
         }
 
         public GitRefMetadata(string name, GitRefType type)
         {
-            this.Name = name ?? throw new ArgumentNullException(nameof(name));
-            this.Type = type;
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+            Type = type;
         }
 
         public string Name { get; private set; }
@@ -64,12 +65,14 @@ namespace Nota.Site.Generator
             get
             {
                 BookVersion version;
-                if (this.Type == GitRefType.Branch && this.Name == "master")
+                if (Type == GitRefType.Branch && Name == "master") {
                     version = BookVersion.VNext;
-                else if (this.Type == GitRefType.Branch)
-                    version = new BookVersion(true, this.Name);
-                else
-                    version = new BookVersion(false, this.Name);
+                } else if (Type == GitRefType.Branch) {
+                    version = new BookVersion(true, Name);
+                } else {
+                    version = new BookVersion(false, Name);
+                }
+
                 return version;
             }
         }
@@ -98,16 +101,18 @@ namespace Nota.Site.Generator
 
     public class BookMetadata : IEquatable<BookMetadata?>
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public BookMetadata()
         {
 
         }
-        public BookMetadata(string location, string beginning, BookVersion version)
+        public BookMetadata(string? location, string? beginning, BookVersion version)
         {
-            this.Location = location;
-            this.Beginning = beginning;
-            this.Version = version;
+            Location = location;
+            Beginning = beginning;
+            Version = version;
         }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 
         // From file
         /// <summary>
@@ -129,7 +134,7 @@ namespace Nota.Site.Generator
         /// <summary>
         /// An optional abbreviation.
         /// </summary>
-        public string Abbr => $"{this.BookType.ToId()}{this.Number} ({this.Version})";
+        public string Abbr => $"{BookType.ToId()}{Number} ({Version})";
         /// <summary>
         /// The Abstract of this book formated as markdown
         /// </summary>
@@ -137,7 +142,7 @@ namespace Nota.Site.Generator
 
         public override string ToString()
         {
-            return this.Title;
+            return Title;
         }
 
         // Generated
@@ -146,48 +151,48 @@ namespace Nota.Site.Generator
         public BookVersion Version { get; }
 
 
-        public BookMetadata WithLocation(string location) => new BookMetadata(location, this.Beginning, this.Version)
+        public BookMetadata WithLocation(string location) => new BookMetadata(location, Beginning, Version)
         {
-            Title = this.Title,
-            Number = this.Number,
-            Cover = this.Cover,
-            BookType = this.BookType,
-            Abstract = this.Abstract,
+            Title = Title,
+            Number = Number,
+            Cover = Cover,
+            BookType = BookType,
+            Abstract = Abstract,
         };
-        public BookMetadata WithBeginning(string beginning) => new BookMetadata(this.Location, beginning, this.Version)
+        public BookMetadata WithBeginning(string beginning) => new BookMetadata(Location, beginning, Version)
         {
-            Title = this.Title,
-            Number = this.Number,
-            Cover = this.Cover,
-            BookType = this.BookType,
-            Abstract = this.Abstract,
+            Title = Title,
+            Number = Number,
+            Cover = Cover,
+            BookType = BookType,
+            Abstract = Abstract,
         };
-        public BookMetadata WithVersion(BookVersion version) => new BookMetadata(this.Location, this.Beginning, version)
+        public BookMetadata WithVersion(BookVersion version) => new BookMetadata(Location, Beginning, version)
         {
-            Title = this.Title,
-            Number = this.Number,
-            Cover = this.Cover,
-            BookType = this.BookType,
-            Abstract = this.Abstract,
+            Title = Title,
+            Number = Number,
+            Cover = Cover,
+            BookType = BookType,
+            Abstract = Abstract,
         };
 
         public override bool Equals(object? obj)
         {
-            return this.Equals(obj as BookMetadata);
+            return Equals(obj as BookMetadata);
         }
 
         public bool Equals(BookMetadata? other)
         {
             return other != null &&
-                   this.Title == other.Title &&
-                   this.Number == other.Number &&
-                   this.BookType == other.BookType &&
-                   this.Version.Equals(other.Version);
+                   Title == other.Title &&
+                   Number == other.Number &&
+                   BookType == other.BookType &&
+                   Version.Equals(other.Version);
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(this.Title, this.Number, this.BookType, this.Version);
+            return HashCode.Combine(Title, Number, BookType, Version);
         }
 
         public static bool operator ==(BookMetadata? left, BookMetadata? right)
@@ -203,18 +208,20 @@ namespace Nota.Site.Generator
 
     public class LicencedFiles
     {
-        public IList<LicenseInfo> LicenseInfos { get; set; }
+        public IList<LicenseInfo> LicenseInfos { get; set; } = Array.Empty<LicenseInfo>();
     }
 
     public class LicenseInfo
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public string Id { get; set; }
         public MetadataContainer Metadata { get; set; }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
     }
 
     public class AllBooksMetadata
     {
-        public IList<BookMetadata> Books { get; set; }
+        public IList<BookMetadata> Books { get; set; } = Array.Empty<BookMetadata>();
     }
 
     internal class HostMetadata
@@ -235,7 +242,7 @@ namespace Nota.Site.Generator
 
     public class SiteMetadata
     {
-        public IList<BookMetadata> Books { get; set; }
+        public IList<BookMetadata> Books { get; set; } = Array.Empty<BookMetadata>();
     }
 
 

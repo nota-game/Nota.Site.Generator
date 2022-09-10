@@ -1,19 +1,19 @@
 ﻿using AdaptMark.Parsers.Markdown;
 using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Inlines;
+
 using AngleSharp.Text;
+
 using Nota.Site.Generator.Markdown.Blocks;
-using Nota.Site.Generator.Stages;
+
 using Stasistium;
 using Stasistium.Documents;
 using Stasistium.Stages;
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics.CodeAnalysis;
-using System.Drawing.Drawing2D;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Nota.Site.Generator.Stages
@@ -31,7 +31,7 @@ namespace Nota.Site.Generator.Stages
         protected override async Task<ImmutableList<IDocument<MarkdownDocument>>> Work(ImmutableList<IDocument<MarkdownDocument>> input, OptionToken options)
         {
 
-            var performed = input;
+            ImmutableList<IDocument<MarkdownDocument>> performed = input;
             var list = ImmutableList<IDocument<MarkdownDocument>>.Empty.ToBuilder();
 
             var stateLookup = performed.ToDictionary(x => x.Id);
@@ -40,22 +40,24 @@ namespace Nota.Site.Generator.Stages
 
             var documentsWithChapters = new HashSet<string>();
 
-            foreach (var item in performed) {
+            foreach (IDocument<MarkdownDocument> item in performed) {
                 var resolver = new RelativePathResolver(item.Id, input.Select(x => x.Id));
-                var itemTask = item;
-                var order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
+                IDocument<MarkdownDocument> itemTask = item;
+                OrderMarkdownMetadata? order = itemTask.Metadata.TryGetValue<OrderMarkdownMetadata>();
                 if (order?.After != null) {
-                    var resolved = resolver[order.After];
-                    if (resolved is not null)
+                    string? resolved = resolver[order.After];
+                    if (resolved is not null) {
                         idToAfter[itemTask.Id] = resolved;
+                    }
                 } else {
                     idToAfter[itemTask.Id] = null;
                 }
 
-                if (this.ContainsChapters(itemTask.Value.Blocks))
-                    documentsWithChapters.Add(itemTask.Id);
+                if (ContainsChapters(itemTask.Value.Blocks)) {
+                    _ = documentsWithChapters.Add(itemTask.Id);
+                }
             }
-            var lookup = idToAfter.ToLookup(x => x.Value, x => x.Key);
+            ILookup<string?, string> lookup = idToAfter.ToLookup(x => x.Value, x => x.Key);
 
 
             // check for wrong Pathes
@@ -78,7 +80,7 @@ namespace Nota.Site.Generator.Stages
 
             var orderedList = new List<string>();
 
-            var startValues = idToAfter.Where(x => x.Value is null && idToAfter.ContainsValue(x.Key)).OrderBy(x => x.Key).Select(x => x.Key);
+            IEnumerable<string> startValues = idToAfter.Where(x => x.Value is null && idToAfter.ContainsValue(x.Key)).OrderBy(x => x.Key).Select(x => x.Key);
             // while (startValues.Any(x=> idToAfter.ContainsKey(x.Value)))
             // {
 
@@ -89,8 +91,8 @@ namespace Nota.Site.Generator.Stages
                 // check for circles or gaps
                 if (!startValues.Any()) {
                     // we have a circle.
-                    var ordering = string.Join("\n", idToAfter.Select(x => $"{x.Key} => {x.Value}"));
-                    throw this.Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency\n." + ordering);
+                    string ordering = string.Join("\n", idToAfter.Select(x => $"{x.Key} => {x.Value}"));
+                    throw Context.Exception("There is a  problem with the ordering. There Seems to be a circle dependency\n." + ordering);
                 }
 
 
@@ -98,10 +100,10 @@ namespace Nota.Site.Generator.Stages
 
                 var stack = new Stack<string>(startValues);
 
-                while (stack.TryPop(out var current)) {
+                while (stack.TryPop(out string? current)) {
                     orderedList.Add(current);
-                    var next = lookup[current];
-                    foreach (var item in next.OrderByDescending(x => x)) {
+                    IEnumerable<string> next = lookup[current];
+                    foreach (string? item in next.OrderByDescending(x => x)) {
                         stack.Push(item);
                     }
                 }
@@ -127,7 +129,7 @@ namespace Nota.Site.Generator.Stages
             }
 
 
-            await this.UpdateHeadersWithContaining(orderedList, stateLookup);
+            await UpdateHeadersWithContaining(orderedList, stateLookup);
 
             // partition the list with chepters
 
@@ -136,7 +138,7 @@ namespace Nota.Site.Generator.Stages
 
             List<string>? currentChapterIds = null;
 
-            foreach (var id in orderedList) {
+            foreach (string id in orderedList) {
                 if (currentChapterIds is null) {
                     currentChapterIds = new List<string>();
                     chapterPartitions.Add(currentChapterIds);
@@ -154,15 +156,15 @@ namespace Nota.Site.Generator.Stages
             }
             var newPatirions = new List<Partition>();
             for (int i = 0; i < chapterPartitions.Count; i++) {
-                var currentParition = chapterPartitions[i];
-                var takeFirstWithoutChapter = i == 0;
-                var takeLastChapter = i == chapterPartitions.Count - 1;
+                List<string> currentParition = chapterPartitions[i];
+                bool takeFirstWithoutChapter = i == 0;
+                bool takeLastChapter = i == chapterPartitions.Count - 1;
 
-                var documents = currentParition.Select(x => stateLookup[x]);
+                IEnumerable<IDocument<MarkdownDocument>> documents = currentParition.Select(x => stateLookup[x]);
 
-                var listOfChaptersInPartition = this.GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
+                List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> listOfChaptersInPartition = GetChaptersInPartitions(takeFirstWithoutChapter, takeLastChapter, documents);
 
-                var documentsInPartition = this.GetDocumentsInPartition(documents, listOfChaptersInPartition);
+                IDocument<MarkdownDocument>[] documentsInPartition = GetDocumentsInPartition(documents, listOfChaptersInPartition);
                 var partitition = new Partition
                 {
                     Ids = currentParition.ToArray(),
@@ -170,7 +172,7 @@ namespace Nota.Site.Generator.Stages
                 };
 
                 newPatirions.Add(partitition);
-                foreach (var item in documentsInPartition) {
+                foreach (IDocument<MarkdownDocument> item in documentsInPartition) {
 
                     list.Add(item);
                 }
@@ -179,37 +181,41 @@ namespace Nota.Site.Generator.Stages
             }
 
 
-      
+
 
 
             return list.ToImmutable();
 
         }
 
-        private async Task UpdateHeadersWithContaining(List<string> orderedList, Dictionary<string, IDocument<MarkdownDocument>> stateLookup)
+        private Task UpdateHeadersWithContaining(List<string> orderedList, Dictionary<string, IDocument<MarkdownDocument>> stateLookup)
         {
             var headerStack = new Stack<HeaderBlock>();
-            foreach (var doc in orderedList.Select(x => stateLookup[x].Value)) {
-                var blocks = doc.Blocks;
+            foreach (MarkdownDocument? doc in orderedList.Select(x => stateLookup[x].Value)) {
+                IList<MarkdownBlock> blocks = doc.Blocks;
                 ScanAndReplace(blocks);
                 void ScanAndReplace(IList<MarkdownBlock> blocks)
                 {
 
-                    for (var i = 0; i < blocks.Count; i++) {
-                        var block = blocks[i];
+                    for (int i = 0; i < blocks.Count; i++) {
+                        MarkdownBlock block = blocks[i];
                         if (block is ChapterHeaderBlock ch && !string.IsNullOrWhiteSpace(ch.ChapterId)) {
-                            while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= ch.HeaderLevel)
-                                headerStack.Pop();
+                            while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= ch.HeaderLevel) {
+                                _ = headerStack.Pop();
+                            }
+
                             headerStack.Push(ch);
                         } else if (block is HeaderBlock bl) {
-                            while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= bl.HeaderLevel)
-                                headerStack.Pop();
+                            while (headerStack.Count > 1 && headerStack.Peek().HeaderLevel >= bl.HeaderLevel) {
+                                _ = headerStack.Pop();
+                            }
+
                             headerStack.Push(bl);
 
-                            var id = GenerateHeaderString(headerStack);
-                            if (bl is ChapterHeaderBlock ch2)
+                            string id = GenerateHeaderString(headerStack);
+                            if (bl is ChapterHeaderBlock ch2) {
                                 ch2.ChapterId = id;
-                            else {
+                            } else {
                                 var newChapter = new ChapterHeaderBlock()
                                 {
                                     HeaderLevel = bl.HeaderLevel,
@@ -224,11 +230,12 @@ namespace Nota.Site.Generator.Stages
                     }
                 }
             }
+            return Task.CompletedTask;
         }
 
         public static string GenerateHeaderString(Stack<HeaderBlock> headerStack)
         {
-            var id = string.Join("→", headerStack.Select(x => MarkdownInline.ToString(x.Inlines)).Reverse());
+            string id = string.Join("→", headerStack.Select(x => MarkdownInline.ToString(x.Inlines)).Reverse());
             id = id.Replace(' ', '-');
             return id;
         }
@@ -238,41 +245,45 @@ namespace Nota.Site.Generator.Stages
             return listOfChaptersInPartition.Select(x =>
             {
                 var order = x.Select(value => value.containingDocument).Distinct().Select((value, index) => (value, index)).ToDictionary(y => y.value, y => y.index);
-                var orderedGroups = x.GroupBy(y => y.containingDocument).OrderBy(y => order[y.Key]);
+                IOrderedEnumerable<IGrouping<IDocument<MarkdownDocument>, (IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> orderedGroups = x.GroupBy(y => y.containingDocument).OrderBy(y => order[y.Key]);
 
-                var referenceBlocks = orderedGroups.Select(group =>
+                IEnumerable<SoureReferenceBlock> referenceBlocks = orderedGroups.Select(group =>
                 {
-                    var blocsk = group.Select(y => y.block).ToArray();
+                    MarkdownBlock[] blocsk = group.Select(y => y.block).ToArray();
                     var wrapper = new SoureReferenceBlock(blocsk, group.Key);
                     return wrapper;
                 });
 
-                var firstDocument = documents.First();
-                var newDoc = firstDocument.Value.GetBuilder().Build();
+                IDocument<MarkdownDocument> firstDocument = documents.First();
+                MarkdownDocument newDoc = firstDocument.Value.GetBuilder().Build();
                 newDoc.Blocks = referenceBlocks.ToArray();
-                var firstBlock = newDoc.Blocks.First();
+                MarkdownBlock firstBlock = newDoc.Blocks.First();
 
-                while (firstBlock is SoureReferenceBlock reference)
+                while (firstBlock is SoureReferenceBlock reference) {
                     firstBlock = reference.Blocks.First();
+                }
 
                 string chapterName;
-                if (firstBlock is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null)
+                if (firstBlock is ChapterHeaderBlock chapterheaderBlock && chapterheaderBlock.ChapterId != null) {
                     chapterName = chapterheaderBlock.ChapterId;
-                else if (firstBlock is HeaderBlock headerBlock)
+                } else if (firstBlock is HeaderBlock headerBlock) {
                     chapterName = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
-                else
+                } else {
                     chapterName = StichStage.NoChapterName;
+                }
 
                 chapterName = System.IO.Path.GetInvalidFileNameChars().Aggregate(chapterName, (filename, invalidChar) => filename.Replace(invalidChar.ToString(), invalidChar.ToHex()), x => x);
 
-                return firstDocument.With(newDoc, this.Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
+                return firstDocument.With(newDoc, Context.GetHashForString(newDoc.ToString())).WithId(chapterName);
             }).ToArray();
         }
 
         private List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>> GetChaptersInPartitions(bool takeFirstWithoutChapter, bool takeLastChapter, IEnumerable<IDocument<MarkdownDocument>> documents)
         {
-            if (documents is not IList<IDocument<MarkdownDocument>> documentList)
+            if (documents is not IList<IDocument<MarkdownDocument>> documentList) {
                 documentList = documents.ToArray();
+            }
+
             var listOfChaptersInPartition = new List<List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>>();
 
             List<(IDocument<MarkdownDocument> containingDocument, MarkdownBlock block)>? currentList = null;
@@ -283,25 +294,24 @@ namespace Nota.Site.Generator.Stages
             }
 
             for (int j = 0; j < documentList.Count; j++) {
-                var currentDocument = documentList[j];
+                IDocument<MarkdownDocument> currentDocument = documentList[j];
                 ScanBlocks(currentDocument.Value.Blocks);
                 void ScanBlocks(IList<MarkdownBlock> blocks)
                 {
-                    foreach (var block in blocks) {
+                    foreach (MarkdownBlock block in blocks) {
                         if (block is SoureReferenceBlock soureReference) {
                             ScanBlocks(soureReference.Blocks);
 
-                        } else if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel <= this.chapterSeperation))
+                        } else if (currentList != null && !(block is HeaderBlock header_ && header_.HeaderLevel <= chapterSeperation)) {
                             currentList.Add((currentDocument, block));
-
-                        else if (block is HeaderBlock header && header.HeaderLevel <= this.chapterSeperation
+                        } else if (block is HeaderBlock header && header.HeaderLevel <= chapterSeperation
                             && (j != documentList.Count - 1 // the last block is also the first of the nex partition
                                 || takeLastChapter)) // we don't want to have (double) unless its the last partition.
                         {
                             currentList = new List<(IDocument<MarkdownDocument>, MarkdownBlock)>();
                             listOfChaptersInPartition.Add(currentList);
                             currentList.Add((currentDocument, block));
-                        } else if (block is HeaderBlock header__ && header__.HeaderLevel <= this.chapterSeperation
+                        } else if (block is HeaderBlock header__ && header__.HeaderLevel <= chapterSeperation
                               && j == documentList.Count - 1) {
                             // we wan't to break the for not foreach, but we are alreary in the last for loop.
                             break; // so this is enough
@@ -318,7 +328,7 @@ namespace Nota.Site.Generator.Stages
 
         private bool ContainsChapters(IList<MarkdownBlock> blocks)
         {
-            return blocks.Any(x => x is HeaderBlock header && header.HeaderLevel <= this.chapterSeperation);
+            return blocks.Any(x => x is HeaderBlock header && header.HeaderLevel <= chapterSeperation);
         }
     }
 
@@ -337,11 +347,11 @@ namespace Nota.Site.Generator.Stages
         /// <summary>
         /// Input ids in this partition
         /// </summary>
-        public string[] Ids { get; set; }
+        public string[] Ids { get; set; } = Array.Empty<string>();
         /// <summary>
         /// Output ID and Hash of the documents.
         /// </summary>
-        public (string Id, string Hash)[] Documents { get; set; }
+        public (string Id, string Hash)[] Documents { get; set; } = Array.Empty<(string Id, string Hash)>();
     }
 
 }

@@ -1,6 +1,8 @@
 ﻿using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Inlines;
+
 using Stasistium.Stages;
+
 using System;
 using System.Linq;
 using System.Text;
@@ -10,125 +12,130 @@ namespace Nota.Site.Generator
     internal class NotaMarkdownRenderer : MarkdownRenderer
     {
 
-        public string EditUrl { get; }
+        public string? EditUrl { get; }
 
-        public NotaMarkdownRenderer(string editUrl)
+        public NotaMarkdownRenderer(string? editUrl)
         {
-            this.EditUrl = editUrl;
+            EditUrl = editUrl;
         }
 
         protected override void Render(StringBuilder builder, MarkdownBlock block)
         {
             switch (block) {
                 case Markdown.Blocks.SoureReferenceBlock sourceReferenceBlock:
-                    builder.Append($"<div class=\"edit-box\">");
-                    var reffData = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitRefMetadata>();
-                    var book = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<Book>();
-                    builder.Append($"<span class='edit-info' >");
-                    if (this.EditUrl is not null && reffData is not null && book is not null) {
+                    _ = builder.Append($"<div class=\"edit-box\">");
+                    GitRefMetadata? reffData = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitRefMetadata>();
+                    Book? book = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<Book>();
+                    _ = builder.Append($"<span class='edit-info' >");
+                    if (EditUrl is not null && reffData is not null && book is not null) {
 
-                        builder.Append($"<a href=\"");
-                        builder.Append(this.EditUrl);
-                        if (!this.EditUrl.EndsWith("/"))
-                            builder.Append('/');
+                        _ = builder.Append($"<a href=\"");
+                        _ = builder.Append(EditUrl);
+                        if (!EditUrl.EndsWith("/")) {
+                            _ = builder.Append('/');
+                        }
 
-                        builder.Append(reffData.Name);
-                        builder.Append("/books/");
-                        builder.Append(book.Name);
-                        builder.Append('/');
+                        _ = builder.Append(reffData.Name);
+                        _ = builder.Append("/books/");
+                        _ = builder.Append(book.Name);
+                        _ = builder.Append('/');
 
-                        builder.Append(sourceReferenceBlock.OriginalDocument.Id);
-                        builder.Append("\" target=\"_blank\" >Bearbeiten</a>");
+                        _ = builder.Append(sourceReferenceBlock.OriginalDocument.Id);
+                        _ = builder.Append("\" target=\"_blank\" >Bearbeiten</a>");
                     }
-                    var commitDetails = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitMetadata>();
+                    GitMetadata? commitDetails = sourceReferenceBlock.OriginalDocument.Metadata.TryGetValue<GitMetadata>();
                     if (commitDetails != null) {
-                        var date = commitDetails.FileCommits.First().Author.Date;
+                        DateTimeOffset date = commitDetails.FileCommits.First().Author.Date;
 
-                        builder.Append("<span class=\"timecode\" timecode=\"");
-                        builder.Append(date
+                        _ = builder.Append("<span class=\"timecode\" timecode=\"");
+                        _ = builder.Append(date
                             .Subtract(new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero))
                             .TotalMilliseconds);
-                        builder.Append("\" >");
-                        builder.Append(date.ToString());
-                        builder.Append("</span>");
+                        _ = builder.Append("\" >");
+                        _ = builder.Append(date.ToString());
+                        _ = builder.Append("</span>");
                     }
-                    builder.Append("</span>");
-                    this.Render(builder, sourceReferenceBlock.Blocks);
-                    builder.Append("</div>");
+                    _ = builder.Append("</span>");
+                    Render(builder, sourceReferenceBlock.Blocks);
+                    _ = builder.Append("</div>");
 
                     break;
 
                 case Markdown.Blocks.ChapterHeaderBlock header:
-                    builder.Append("<h");
-                    builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    var id = header.ChapterId ?? GetHeaderText(header);
+                    _ = builder.Append("<h");
+                    _ = builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    string id = header.ChapterId ?? GetHeaderText(header);
                     id = id.Replace(' ', '-');
                     if (id.Length > 0) {
-                        builder.Append(" id=\"");
-                        builder.Append(id);
-                        builder.Append("\" ");
+                        _ = builder.Append(" id=\"");
+                        _ = builder.Append(id);
+                        _ = builder.Append("\" ");
                     }
-                    builder.Append(">");
+                    _ = builder.Append(">");
 
-                    foreach (var item in header.Inlines)
-                        this.Render(builder, item);
-                    builder.Append("</h");
-                    builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    builder.Append(">");
+                    foreach (MarkdownInline item in header.Inlines) {
+                        Render(builder, item);
+                    }
+
+                    _ = builder.Append("</h");
+                    _ = builder.Append(header.HeaderLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    _ = builder.Append(">");
 
                     break;
 
                 case Markdown.Blocks.SideNote blocks:
-                    builder.Append($"<aside id=\"{blocks.Id}\" class=\"{blocks.SideNoteType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
-                    this.Render(builder, blocks.Blocks);
-                    builder.Append("</aside>");
+                    _ = builder.Append($"<aside id=\"{blocks.Id}\" class=\"{blocks.SideNoteType}{(blocks.Distributions.Any() ? " " : string.Empty)}{string.Join(" ", blocks.Distributions.Select(x => $"{x.id}-{x.distribution}"))}\" >");
+                    Render(builder, blocks.Blocks);
+                    _ = builder.Append("</aside>");
 
                     break;
 
                 case Markdown.Blocks.DivBlock div:
-                    builder.Append($"<div class=\"{div.CssClass}\" >");
-                    this.Render(builder, div.Blocks);
-                    builder.Append("</div>");
+                    _ = builder.Append($"<div class=\"{div.CssClass}\" >");
+                    Render(builder, div.Blocks);
+                    _ = builder.Append("</div>");
                     break;
 
                 case Markdown.Blocks.ExtendedTableBlock table:
-                    builder.Append("<table>");
+                    _ = builder.Append("<table>");
 
                     if (table.HasHeader) {
-                        builder.Append("<thead>");
+                        _ = builder.Append("<thead>");
                         PrintRows(0, 1, true);
-                        builder.Append("</thead>");
-                        builder.Append("<tbody>");
+                        _ = builder.Append("</thead>");
+                        _ = builder.Append("<tbody>");
                         PrintRows(1, table.Rows.Count, false);
-                        builder.Append("</tbody>");
+                        _ = builder.Append("</tbody>");
                     } else {
-                        builder.Append("<tbody>");
+                        _ = builder.Append("<tbody>");
                         PrintRows(0, table.Rows.Count, false);
-                        builder.Append("</tbody>");
+                        _ = builder.Append("</tbody>");
                     }
 
                     void PrintRows(int from, int to, bool header)
                     {
                         for (int i = from; i < to; i++) {
-                            builder.Append("<tr>");
+                            _ = builder.Append("<tr>");
                             for (int j = 0; j < table.Rows[i].Cells.Count; j++) {
-                                if (i == 0 && table.HasHeader)
-                                    builder.Append("<th>");
-                                else
-                                    builder.Append("<td>");
+                                if (i == 0 && table.HasHeader) {
+                                    _ = builder.Append("<th>");
+                                } else {
+                                    _ = builder.Append("<td>");
+                                }
 
-                                this.Render(builder, table.Rows[i].Cells[j].Inlines);
+                                Render(builder, table.Rows[i].Cells[j].Inlines);
 
-                                if (i == 0 && table.HasHeader)
-                                    builder.Append("</th>");
-                                else
-                                    builder.Append("</td>");
+                                if (i == 0 && table.HasHeader) {
+                                    _ = builder.Append("</th>");
+                                } else {
+                                    _ = builder.Append("</td>");
+                                }
                             }
-                            builder.Append("</tr>");
+                            _ = builder.Append("</tr>");
                         }
                     }
 
-                    builder.Append("</table>");
+                    _ = builder.Append("</table>");
                     break;
 
                 default:

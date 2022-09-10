@@ -10,27 +10,33 @@ namespace Stasistium.PDF
 {
     internal class HyphenatePatternsLoader : IHyphenatePatternsLoader
     {
+
+#pragma warning disable CS0618 // Type or member is obsolete
         private readonly ResourceHyphenatePatternsLoader originalPatternLoader;
+#pragma warning restore CS0618 // Type or member is obsolete
         private readonly string exceptions;
         private readonly string patterns;
         private readonly Language language;
 
         private static readonly Dictionary<Language, string> patternLookup = new Dictionary<Language, string>();
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public HyphenatePatternsLoader(Language language)
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         {
             this.language = language;
 
-            switch (language)
-            {
+            switch (language) {
                 case Language.enUS:
-                    this.originalPatternLoader = new ResourceHyphenatePatternsLoader(HyphenatePatternsLanguage.EnglishUs);
+#pragma warning disable CS0618 // Type or member is obsolete
+                    originalPatternLoader = new ResourceHyphenatePatternsLoader(HyphenatePatternsLanguage.EnglishUs);
                     return;
                 case Language.enGB:
-                    this.originalPatternLoader = new ResourceHyphenatePatternsLoader(HyphenatePatternsLanguage.EnglishBritish);
+                    originalPatternLoader = new ResourceHyphenatePatternsLoader(HyphenatePatternsLanguage.EnglishBritish);
                     return;
                 case Language.ruRU:
-                    this.originalPatternLoader = new ResourceHyphenatePatternsLoader(HyphenatePatternsLanguage.Russian);
+                    originalPatternLoader = new ResourceHyphenatePatternsLoader(HyphenatePatternsLanguage.Russian);
+#pragma warning restore CS0618 // Type or member is obsolete
                     return;
                 default:
                     break;
@@ -39,17 +45,18 @@ namespace Stasistium.PDF
 
 
             //var names = typeof(HyphenatePatternsLoader).Assembly.GetManifestResourceNames();
-            using (var stream = typeof(HyphenatePatternsLoader).Assembly.GetManifestResourceStream($"{typeof(HyphenatePatternsLoader).Assembly.GetName().Name}.Resources.{language}.hyp.txt"))
-            using (var reader = new StreamReader(stream))
-                this.exceptions = reader.ReadToEnd();
+            using (Stream stream = typeof(HyphenatePatternsLoader).Assembly.GetManifestResourceStream($"{typeof(HyphenatePatternsLoader).Assembly.GetName().Name}.Resources.{language}.hyp.txt")!)
+            using (var reader = new StreamReader(stream)) {
+                exceptions = reader.ReadToEnd();
+            }
 
-            if (patternLookup.ContainsKey(language))
-                this.patterns = patternLookup[language];
-            else
-            {
-                using (var stream = typeof(HyphenatePatternsLoader).Assembly.GetManifestResourceStream($"{typeof(HyphenatePatternsLoader).Assembly.GetName().Name}.Resources.{language}.pat.txt"))
-                using (var reader = new StreamReader(stream))
-                    this.patterns = reader.ReadToEnd();
+            if (patternLookup.ContainsKey(language)) {
+                patterns = patternLookup[language];
+            } else {
+                using (Stream stream = typeof(HyphenatePatternsLoader).Assembly.GetManifestResourceStream($"{typeof(HyphenatePatternsLoader).Assembly.GetName().Name}.Resources.{language}.pat.txt")!)
+                using (var reader = new StreamReader(stream)) {
+                    patterns = reader.ReadToEnd();
+                }
 
                 //var patternsClasses = this.patterns
                 //    .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
@@ -64,7 +71,7 @@ namespace Stasistium.PDF
                 //    .Select(x => x.Value.str));
 
 
-                patternLookup[language] = this.patterns;
+                patternLookup[language] = patterns;
             }
 
 
@@ -73,16 +80,20 @@ namespace Stasistium.PDF
 
         public string LoadExceptions()
         {
-            if (this.originalPatternLoader != null)
-                return this.originalPatternLoader.LoadExceptions();
-            return this.exceptions;
+            if (originalPatternLoader != null) {
+                return originalPatternLoader.LoadExceptions();
+            }
+
+            return exceptions;
         }
 
         public string LoadPatterns()
         {
-            if (this.originalPatternLoader != null)
-                return this.originalPatternLoader.LoadPatterns();
-            return this.patterns;
+            if (originalPatternLoader != null) {
+                return originalPatternLoader.LoadPatterns();
+            }
+
+            return patterns;
 
         }
 
@@ -95,12 +106,12 @@ namespace Stasistium.PDF
 
             public int GetLevelByIndex(int index)
             {
-                return this.levels[index];
+                return levels[index];
             }
 
             public int GetLevelsCount()
             {
-                return this.levels.Length;
+                return levels.Length;
             }
 
             public Pattern(string str, IEnumerable<int> levels)
@@ -113,29 +124,41 @@ namespace Stasistium.PDF
             public Pattern(string str)
             {
                 this.str = str;
-                this.levels = new int[0];
+                levels = new int[0];
             }
 
-            public static int Compare(Pattern x, Pattern y)
+            public static int Compare(Pattern? x, Pattern? y)
             {
+                if (x == null && y == null) {
+                    return 0;
+                }
+
+                if (x == null) {
+                    return -1;
+                }
+                if (y == null) {
+                    return 1;
+                }
                 bool first = x.str.Length < y.str.Length;
                 int minSize = first ? x.str.Length : y.str.Length;
-                for (var i = 0; i < minSize; ++i)
-                {
-                    if (x.str[i] < y.str[i])
+                for (int i = 0; i < minSize; ++i) {
+                    if (x.str[i] < y.str[i]) {
                         return -1;
-                    if (x.str[i] > y.str[i])
+                    }
+
+                    if (x.str[i] > y.str[i]) {
                         return 1;
+                    }
                 }
                 return first ? -1 : 1;
             }
 
-            int IComparer<Pattern>.Compare(Pattern x, Pattern y)
+            int IComparer<Pattern>.Compare(Pattern? x, Pattern? y)
             {
                 return Compare(x, y);
             }
 
-            public int CompareTo(Pattern other)
+            public int CompareTo(Pattern? other)
             {
                 return Compare(this, other);
             }
@@ -145,7 +168,7 @@ namespace Stasistium.PDF
 
 namespace Stasistium.PDF
 {
-    enum Language
+    internal enum Language
     {
         enUS,
         enGB,

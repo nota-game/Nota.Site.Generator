@@ -1,17 +1,18 @@
-﻿using AdaptMark.Parsers.Markdown;
-using Stasistium.Documents;
-using System.Threading.Tasks;
-using System.Collections.Immutable;
-using Stasistium.Stages;
-using Nota.Site.Generator.Stages;
-using Nota.Site.Generator.Markdown.Blocks;
-using System.Collections.Generic;
-using System;
-using System.Linq;
+﻿using AdaptMark.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown;
 using AdaptMark.Parsers.Markdown.Blocks;
 using AdaptMark.Parsers.Markdown.Inlines;
-using Microsoft.Net.Http.Headers;
-using AdaptMark.Markdown.Blocks;
+
+using Nota.Site.Generator.Markdown.Blocks;
+
+using Stasistium.Documents;
+using Stasistium.Stages;
+
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace Nota.Site.Generator.Stages
 {
@@ -24,7 +25,7 @@ namespace Nota.Site.Generator.Stages
 
         public GetReferenceLocationStage(IGeneratorContext context, string? name = null) : base(context, name)
         {
-            
+
         }
 
         protected override Task<ImmutableList<IDocument<MarkdownDocument>>> Work(ImmutableList<IDocument<MarkdownDocument>> input, OptionToken options)
@@ -32,31 +33,29 @@ namespace Nota.Site.Generator.Stages
             return Task.FromResult(input.Select(docDocument =>
             {
 
-                var headers = new Stack<HeaderBlock>();
-                var list = new List<ImageReference>();
+                Stack<HeaderBlock> headers = new Stack<HeaderBlock>();
+                List<ImageReference> list = new List<ImageReference>();
 
-                var doc = docDocument.Value;
-                var currentDocumentId = docDocument.Id;
+                MarkdownDocument doc = docDocument.Value;
+                string currentDocumentId = docDocument.Id;
 
                 SearchBlocks(doc.Blocks);
 
                 void SearchBlocks(IEnumerable<MarkdownBlock> blocks)
                 {
-                    foreach (var block in blocks)
-                    {
-                        if (block is HeaderBlock header)
-                        {
-                            while (headers.Count > 1 && headers.Peek().HeaderLevel >= header.HeaderLevel)
-                                headers.Pop();
+                    foreach (MarkdownBlock block in blocks) {
+                        if (block is HeaderBlock header) {
+                            while (headers.Count > 1 && headers.Peek().HeaderLevel >= header.HeaderLevel) {
+                                _ = headers.Pop();
+                            }
+
                             headers.Push(header);
                         }
 
-                        if (block is IBlockContainer container)
-                        {
+                        if (block is IBlockContainer container) {
                             SearchBlocks(container.Blocks);
                         }
-                        if (block is IInlineContainer inlines)
-                        {
+                        if (block is IInlineContainer inlines) {
                             SearchInlines(inlines.Inlines);
                         }
 
@@ -64,26 +63,17 @@ namespace Nota.Site.Generator.Stages
                 }
                 void SearchInlines(IEnumerable<MarkdownInline> inlines)
                 {
-                    foreach (var inline in inlines)
-                    {
-                        switch (inline)
-                        {
-                            case ImageInline image:
-                                {
+                    foreach (MarkdownInline inline in inlines) {
+                        switch (inline) {
+                            case ImageInline image: {
                                     string headerString;
-                                    if (headers.Count > 0)
-                                    {
-                                        if (headers.Peek() is ChapterHeaderBlock chapterHeaderBlock && chapterHeaderBlock.ChapterId is not null)
-                                        {
+                                    if (headers.Count > 0) {
+                                        if (headers.Peek() is ChapterHeaderBlock chapterHeaderBlock && chapterHeaderBlock.ChapterId is not null) {
                                             headerString = chapterHeaderBlock.ChapterId;
-                                        }
-                                        else
-                                        {
+                                        } else {
                                             headerString = StichStage.GenerateHeaderString(headers);
                                         }
-                                    }
-                                    else
-                                    {
+                                    } else {
                                         headerString = string.Empty;
                                     }
 
@@ -95,8 +85,7 @@ namespace Nota.Site.Generator.Stages
                                     });
                                     break;
                                 }
-                            case IInlineContainer container:
-                                {
+                            case IInlineContainer container: {
                                     SearchInlines(container.Inlines);
                                     break;
                                 }
@@ -106,9 +95,9 @@ namespace Nota.Site.Generator.Stages
                     }
                 }
 
-                var data = new ImageReferences() { References = list.OrderBy(x => x.Header).ThenBy(x => x.ReferencedId).ToArray() };
+                ImageReferences data = new ImageReferences() { References = list.OrderBy(x => x.Header).ThenBy(x => x.ReferencedId).ToArray() };
 
-                var document = docDocument.With(docDocument.Metadata.Add(data));
+                IDocument<MarkdownDocument> document = docDocument.With(docDocument.Metadata.Add(data));
 
 
                 return document;
@@ -121,11 +110,13 @@ namespace Nota.Site.Generator.Stages
 
     public class ImageReference
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public string ReferencedId { get; set; }
         public string Document { get; set; }
         public BookVersion Version { get; set; }
         public BookMetadata Book { get; set; }
         public string Header { get; set; }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
 
         public override bool Equals(object? obj)
         {
@@ -144,6 +135,6 @@ namespace Nota.Site.Generator.Stages
 
     public class ImageReferences
     {
-        public ImageReference[] References { get; set; }
+        public ImageReference[] References { get; set; } = Array.Empty<ImageReference>();
     }
 }

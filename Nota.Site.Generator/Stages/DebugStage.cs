@@ -39,7 +39,7 @@ namespace Nota.Site.Generator.Stages
                     }
 
                 }
-                list.ToString();
+                _ = list.ToString();
             }
 
             System.Diagnostics.Debug.WriteLine($"{this.tag}\t{Print(options)}");

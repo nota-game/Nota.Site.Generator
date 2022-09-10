@@ -21,7 +21,7 @@ namespace Nota.Site.Generator.Markdown.Blocks
                 return Task.FromResult(input);
             var newDocument = input.Value.GetBuilder().Build();
             newDocument.Blocks = input.Value.Blocks;
-            newDocument.Blocks.Remove(block);
+            _ = newDocument.Blocks.Remove(block);
             var result = input.With(input.Metadata.Add(block.Data));
             return Task.FromResult(result);
         }

@@ -1,29 +1,36 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using AdaptMark.Parsers.Markdown;
+﻿using AdaptMark.Parsers.Markdown;
 using AdaptMark.Parsers.Markdown.Blocks;
+using AdaptMark.Parsers.Markdown.Inlines;
+
+using AngleSharp;
+using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
+
+using LibGit2Sharp;
+
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+
+using Nota.Site.Generator.Markdown.Blocks;
+using Nota.Site.Generator.Stages;
+
 using Stasistium;
 using Stasistium.Documents;
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
-using Westwind.AspNetCore.LiveReload;
-using Blocks = AdaptMark.Parsers.Markdown.Blocks;
-using Inlines = AdaptMark.Parsers.Markdown.Inlines;
-using Nota.Site.Generator.Stages;
-using Nota.Site.Generator.Markdown.Blocks;
-using System.Text;
-using AngleSharp;
-using AngleSharp.Html.Parser;
-using AngleSharp.Dom;
-
-using IDocument = Stasistium.Documents.IDocument;
-using LibGit2Sharp;
 using System.Reflection;
-using AdaptMark.Parsers.Markdown.Inlines;
+using System.Text;
+using System.Threading.Tasks;
+
+using Westwind.AspNetCore.LiveReload;
+
+using Blocks = AdaptMark.Parsers.Markdown.Blocks;
+using IDocument = Stasistium.Documents.IDocument;
+using Inlines = AdaptMark.Parsers.Markdown.Inlines;
 
 namespace Nota.Site.Generator
 {
@@ -31,14 +38,14 @@ namespace Nota.Site.Generator
     {
         public XmlMetaData()
         {
-            
+
         }
         public string? NamespaceVersion { get; set; }
     }
 
-    class AllDocumentsThatAreDependedOn
+    internal class AllDocumentsThatAreDependedOn
     {
-        public string[] DependsOn { get; set; }
+        public string[] DependsOn { get; set; } = Array.Empty<string>();
     }
     public static class Nota
     {
@@ -84,8 +91,7 @@ namespace Nota.Site.Generator
             return IsImage(document.Id);
         }
 
-
-        static bool CheckLicense(IDocument<Stream> x)
+        private static bool CheckLicense(IDocument<Stream> x)
         {
             if (FileCanHasLicense(x) && x.Metadata.TryGetValue<XmpMetadata>() == null) {
                 x.Context.Logger.Error($"Remove {x.Id} because of missing license");
@@ -118,7 +124,7 @@ namespace Nota.Site.Generator
         {
 
             // get version
-            var version = (typeof(Nota).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>() is AssemblyInformationalVersionAttribute attribute)
+            string version = (typeof(Nota).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>() is AssemblyInformationalVersionAttribute attribute)
             ? attribute.InformationalVersion
             : "Unknown";
 
@@ -131,15 +137,16 @@ namespace Nota.Site.Generator
 
             configuration ??= new FileInfo("config.json");
 
-            if (!configuration.Exists)
+            if (!configuration.Exists) {
                 throw new FileNotFoundException($"No configuration file was found ({configuration.FullName})");
+            }
 
             Config config;
             await using (var context = new GeneratorContext()) {
 
 
 
-                var configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
+                Stasistium.Stages.IStageBaseOutput<Config?> configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
                  .File()
                  .Json<Config>("Parse Configuration")
                  ;
@@ -147,11 +154,13 @@ namespace Nota.Site.Generator
                 var taskCompletion = new TaskCompletionSource<Config>();
                 configFile.PostStages += (ImmutableList<IDocument<Config?>> cache, Stasistium.Stages.OptionToken options) =>
                 {
-                    var value = cache.Single().Value;
-                    if (value is not null)
+                    Config? value = cache.Single().Value;
+                    if (value is not null) {
                         taskCompletion.SetResult(value);
-                    else
+                    } else {
                         taskCompletion.SetException(new IOException("Configuration not found"));
+                    }
+
                     return Task.CompletedTask;
                 };
 
@@ -164,25 +173,25 @@ namespace Nota.Site.Generator
                 config = await taskCompletion.Task;
             }
 
-            var editUrl = config.ContentRepo?.Url;
+            string? editUrl = config.ContentRepo?.Url;
             if (editUrl is not null) {
-                if (!editUrl.StartsWith("https://github.com/") || !editUrl.EndsWith(".git"))
+                if (!editUrl.StartsWith("https://github.com/") || !editUrl.EndsWith(".git")) {
                     editUrl = null;
-                else {
+                } else {
                     editUrl = editUrl[..^".git".Length] + "/edit/";
                 }
             }
 
             // Create the committer's signature and commit
             var author = new LibGit2Sharp.Signature("NotaSiteGenerator", "@NotaSiteGenerator", DateTime.Now);
-            var committer = author;
+            Signature committer = author;
 
             var s = System.Diagnostics.Stopwatch.StartNew();
 
 
-            using var repo = PreGit(config, author, workdirPath, cache, output);
+            using Repository repo = PreGit(config, author, workdirPath, cache, output);
             if (File.Exists(Path.Combine(cache, "sourceVersion"))) {
-                var oldVersion = await File.ReadAllTextAsync(Path.Combine(cache, "sourceVersion"));
+                string oldVersion = await File.ReadAllTextAsync(Path.Combine(cache, "sourceVersion"));
                 if (oldVersion != version || version.EndsWith("-dirty")) {
                     UseCache = false;
                 }
@@ -196,7 +205,7 @@ namespace Nota.Site.Generator
                 context.CacheFolder.Create();
                 await File.WriteAllTextAsync(Path.Combine(context.CacheFolder.FullName, "sourceVersion"), version);
 
-                var configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
+                Stasistium.Stages.IStageBaseOutput<Config?> configFile = context.StageFromResult("configuration", configuration.FullName, x => x)
                  .File()
                  .Json<Config>("Parse Configuration")
                  ;
@@ -210,24 +219,25 @@ namespace Nota.Site.Generator
                     .UseWebRoot(workingDir.FullName)
                     .ConfigureServices(services =>
                     {
-                        services.AddLiveReload();
+                        _ = services.AddLiveReload();
                     })
                     .Configure(app =>
                     {
-                        app.UseLiveReload();
-                        app.UseStaticFiles();
+                        _ = app.UseLiveReload();
+                        _ = app.UseStaticFiles();
                     })
                     .Build();
                     await host.StartAsync();
 
-                    var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
-                    foreach (var item in feature.Addresses)
+                    Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature? feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+                    foreach (string item in feature?.Addresses ?? Array.Empty<string>()) {
                         Console.WriteLine($"Listinging to: {item}");
+                    }
                 }
 
 
 
-                var contentRepo = configFile
+                Stasistium.Stages.IStageBaseOutput<GitRefStage> contentRepo = configFile
                     .Select(x => x.With(x.Value?.ContentRepo ?? throw x.Context.Exception($"{nameof(Config.ContentRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.ContentRepo))
                         .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                     .GitClone("Git for Content")
@@ -235,18 +245,18 @@ namespace Nota.Site.Generator
                     //.Where(x => true) // for debuging 
                     ;
 
-                var schemaRepo = configFile
+                Stasistium.Stages.IStageBaseOutput<GitRefStage> schemaRepo = configFile
                     .Select(x =>
                         x.With(x.Value?.SchemaRepo ?? throw x.Context.Exception($"{nameof(Config.SchemaRepo)} not set on configuration."), x.Context.GetHashForObject(x.Value.SchemaRepo))
                         .With(x.Metadata.Add(new HostMetadata() { Host = x.Value.Host })))
                     .GitClone("Git for Schema");
 
-                var layoutProvider = configFile
+                Stasistium.Stages.IStageBaseOutput<Microsoft.Extensions.FileProviders.IFileProvider> layoutProvider = configFile
                     .Select(x => x.With(x.Value?.Layouts ?? "layout", x.Value?.Layouts ?? "layout"), "Transform LayoutProvider from Config")
                     .FileSystem("Layout Filesystem")
                     .FileProvider("Layout", "Layout FIle Provider");
 
-                var staticFilesInput = configFile
+                Stasistium.Stages.IStageBaseOutput<Stream> staticFilesInput = configFile
                     .Select(x => x.With(x.Value?.StaticContent ?? "static", x.Value?.StaticContent ?? "static"), "Static FIle from Config")
                     .FileSystem("static Filesystem");
 
@@ -270,7 +280,7 @@ namespace Nota.Site.Generator
                 //.Where(x => Path.GetExtension(x.Id) == ".scss", "Filter .scss")
                 //.StreamToText(name: "actual to text for scss");
 
-                var staticFiles2 = staticFilesInput
+                Stasistium.Stages.IStageBaseOutput<Stream> staticFiles2 = staticFilesInput
                     //.If
                     .XMP()
                        //;
@@ -287,7 +297,7 @@ namespace Nota.Site.Generator
 
 
 
-                var razorProviderStatic = staticFiles2
+                Stasistium.Stages.IStageBaseOutput<Stasistium.Razor.RazorProvider> razorProviderStatic = staticFiles2
                    .FileProvider("Content", "Content file Provider")
                    .Concat(layoutProvider, "Concat Content and layout FileProvider")
                    .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider STATIC with ViewStart");
@@ -298,7 +308,7 @@ namespace Nota.Site.Generator
 
 
 
-                var comninedFiles = contentRepo
+                Stasistium.Stages.IStageBaseOutput<Stream> comninedFiles = contentRepo
                     .CacheDocument("branchedDocuments", c => c
                      .GroupBy(x => x.Value.FrindlyName,
                      (key, input) => DocumentsForBranch(input, key, editUrl), "Select Content Files from Ref")
@@ -308,11 +318,11 @@ namespace Nota.Site.Generator
 
 
 
-                var allBooks = comninedFiles.ListTransform(x =>
+                Stasistium.Stages.IStageBaseOutput<AllBooksMetadata> allBooks = comninedFiles.ListTransform(x =>
 
                 {
-                    var bookData = x.Where(y => y.Metadata.TryGetValue<SiteMetadata>() is not null).SelectMany(y => y.Metadata.GetValue<SiteMetadata>().Books);
-                    var bookArray = bookData.Distinct().ToArray();
+                    IEnumerable<BookMetadata> bookData = x.Where(y => y.Metadata.TryGetValue<SiteMetadata>() is not null).SelectMany(y => y.Metadata.GetValue<SiteMetadata>().Books);
+                    BookMetadata[] bookArray = bookData.Distinct().ToArray();
 
                     var books = new AllBooksMetadata()
                     {
@@ -324,12 +334,12 @@ namespace Nota.Site.Generator
                 }
                        ); ;
 
-                var imageData = comninedFiles.Where(x => x.Metadata.TryGetValue<ImageReferences>() != null)
+                Stasistium.Stages.IStageBaseOutput<ImageReferences> imageData = comninedFiles.Where(x => x.Metadata.TryGetValue<ImageReferences>() != null)
               .ListTransform(documents =>
               {
-                  var newReferences = documents.SelectMany(x =>
+                  IOrderedEnumerable<ImageReference> newReferences = documents.SelectMany(x =>
                   {
-                      var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                      string prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
                       return x.Metadata.GetValue<ImageReferences>().References
                           //.Select(y =>
                           //{
@@ -356,36 +366,40 @@ namespace Nota.Site.Generator
               ;
 
 
-                var removedDoubleImages = comninedFiles.Where(x => IsImage(x))
+                Stasistium.Stages.IStageBaseOutput<Stream> removedDoubleImages = comninedFiles.Where(x => IsImage(x))
                      .Merge(imageData, (file, image) =>
                      {
-                         var references = image.Value.References.Where(x => x.ReferencedId == file.Id);
+                         IEnumerable<ImageReference> references = image.Value.References.Where(x => x.ReferencedId == file.Id);
                          if (references.Any()) {
                              var newData = new ImageReferences()
                              {
                                  References = references.ToArray()
                              };
                              return file.With(file.Metadata.Add(newData));
-                         } else return file;
+                         } else {
+                             return file;
+                         }
                      })
                     .GroupBy(
                     x =>
                     {
-                    // Use file hash. Document Hash has also metadata
-                        using (var stream = x.Value)
+                        // Use file hash. Document Hash has also metadata
+                        using (Stream stream = x.Value) {
                             return context.GetHashForStream(stream);
+                        }
                     },
                     (key, input) =>
                     {
-                        var erg = input.ListTransform(key, (x, key) =>
+                        Stasistium.Stages.IStageBaseOutput<Stream> erg = input.ListTransform(key, (x, key) =>
                          {
-                             if (!x.Skip(1).Any())
+                             if (!x.Skip(1).Any()) {
                                  return x.First();
+                             }
 
-                             var doc = x.First();
+                             IDocument<Stream> doc = x.First();
                              doc = doc.WithId(key.Single().Value + NotaPath.GetExtension(doc.Id));
-                             foreach (var item in x) {
-                                 var metadata = item.Metadata.TryGetValue<ImageReferences>();
+                             foreach (IDocument<Stream> item in x) {
+                                 ImageReferences? metadata = item.Metadata.TryGetValue<ImageReferences>();
                                  if (metadata is null) {
 
                                      metadata = new ImageReferences()
@@ -395,18 +409,20 @@ namespace Nota.Site.Generator
                                         } }
                                      };
                                  }
-                                 doc = doc.With(doc.Metadata.AddOrUpdate(metadata, (oldvalue, newvalue) => new ImageReferences()
+#pragma warning disable CS8621 // Nullability of reference types in return type doesn't match the target delegate (possibly because of nullability attributes).
+                                 doc = doc.With(doc.Metadata.AddOrUpdate(metadata, (ImageReferences? oldvalue, ImageReferences newvalue) => new ImageReferences()
                                  {
                                      References = oldvalue?.References.Concat(newvalue.References).Distinct().ToArray() ?? newvalue.References
                                  }));
+#pragma warning restore CS8621 // Nullability of reference types in return type doesn't match the target delegate (possibly because of nullability attributes).
                              }
 
-                         // doc.Metadata.GetValue<ImageReferences>().References.Select(y=>
-                         // {
-                         //     var targetPath = y.ReferencedId;
-                         //     relativeTo = y.Document;
-                         //     return y;
-                         // });
+                             // doc.Metadata.GetValue<ImageReferences>().References.Select(y=>
+                             // {
+                             //     var targetPath = y.ReferencedId;
+                             //     relativeTo = y.Document;
+                             //     return y;
+                             // });
 
                              return doc;
 
@@ -417,11 +433,11 @@ namespace Nota.Site.Generator
                     ;
 
 
-                var combinedFiles = comninedFiles
+                Stasistium.Stages.IStageBaseOutput<Stream> combinedFiles = comninedFiles
                 // .Where(x=>!IsImage(x)) // remove the images since we will get those from removed DoublesImages
                 .Merge(removedDoubleImages.ListTransform(x =>
                 {
-                //var l = x.Select(y => y).ToArray();
+                    //var l = x.Select(y => y).ToArray();
                     return context.CreateDocument(x, context.GetHashForObject(x), "list-of-doubles");
                 }), CombineFiles)
                 .Where(x => !x.Id.StartsWith("TO_REMOVE"))
@@ -435,12 +451,12 @@ namespace Nota.Site.Generator
 
 
 
-                var files = combinedFiles.Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)));
+                Stasistium.Stages.IStageBaseOutput<Stream> files = combinedFiles.Merge(allBooks, (file, allBooks) => file.With(file.Metadata.Add(allBooks.Value)));
 
 
 
 
-                var licesnseFIles = files
+                Stasistium.Stages.IStageBaseOutput<LicencedFiles> licesnseFIles = files
                 .Concat(staticFiles2)
 
                  .Where(x => x.Metadata.TryGetValue<XmpMetadata>() != null)
@@ -467,7 +483,7 @@ namespace Nota.Site.Generator
 
 
 
-                var staticFiles = staticFiles2
+                Stasistium.Stages.IStageBaseOutput<Stream> staticFiles = staticFiles2
                     .Merge(licesnseFIles, (file, value) =>
                     {
                         return file.With(file.Metadata.Add(value.Value));
@@ -484,14 +500,14 @@ namespace Nota.Site.Generator
 
 
 
-                var razorProvider = files
+                Stasistium.Stages.IStageBaseOutput<Stasistium.Razor.RazorProvider> razorProvider = files
                 .Debug("test")
                     .FileProvider("Content", "Content file Provider")
                     .Concat(layoutProvider, "Concat Content and layout FileProvider")
                     .RazorProvider("Content", "Layout/ViewStart.cshtml", name: "Razor Provider with ViewStart")
                     ;
 
-                var rendered = files
+                Stasistium.Stages.IStageBaseOutput<Stream> rendered = files
 
 
                         .If(razorProvider
@@ -504,7 +520,7 @@ namespace Nota.Site.Generator
                             .Else((x, provider) => x);
 
 
-                var schemaFiles = schemaRepo
+                Stasistium.Stages.IStageBaseOutput<Stream> schemaFiles = schemaRepo
 
                      .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))))
                      .Files(true, name: "Schema Repo to Files")
@@ -512,22 +528,22 @@ namespace Nota.Site.Generator
                      .ToText()
                         .Select(y =>
                         {
-                            var gitData = y.Metadata.GetValue<GitRefMetadata>()!;
-                            var version = gitData.CalculatedVersion;
-                            var host = y.Metadata.GetValue<HostMetadata>()!.Host;
-                            var newText = hostReplacementRegex.Replace(y.Value, @$"{host?.TrimEnd('/')}/schema/{version}/");
+                            GitRefMetadata gitData = y.Metadata.GetValue<GitRefMetadata>()!;
+                            BookVersion version = gitData.CalculatedVersion;
+                            string? host = y.Metadata.GetValue<HostMetadata>()!.Host;
+                            string newText = hostReplacementRegex.Replace(y.Value, @$"{host?.TrimEnd('/')}/schema/{version}/");
                             return y.With(newText, y.Context.GetHashForString(newText));
                         })
                         .ToStream()
                      .Select(x =>
                      {
-                         var gitData = x.Metadata.GetValue<GitRefMetadata>()!;
-                         var version = gitData.CalculatedVersion;
+                         GitRefMetadata gitData = x.Metadata.GetValue<GitRefMetadata>()!;
+                         BookVersion version = gitData.CalculatedVersion;
 
                          return x.WithId($"schema/{version}/{x.Id.TrimStart('/')}");
                      });
 
-                var rendered2 = rendered
+                Stasistium.Stages.IStageBaseOutput<Stream> rendered2 = rendered
                     ;
 
 
@@ -561,9 +577,10 @@ namespace Nota.Site.Generator
                             //await g.UpdateFiles(forceUpdate).ConfigureAwait(false);
                             s.Stop();
                             context.Logger.Info($"Update Took {s.Elapsed}");
-                            var feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
-                            foreach (var item in feature.Addresses)
+                            Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature? feature = host.ServerFeatures.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+                            foreach (string item in feature?.Addresses ?? Array.Empty<string>()) {
                                 Console.WriteLine($"Listinging to: {item}");
+                            }
                         } catch (Exception e) {
 
                             Console.WriteLine("Error");
@@ -571,9 +588,11 @@ namespace Nota.Site.Generator
                         }
 
                         Console.WriteLine("Press Q to Quit, any OTHER key to update.");
-                        var key = Console.ReadKey(true);
-                        if (key.Key == ConsoleKey.Q)
+                        ConsoleKeyInfo key = Console.ReadKey(true);
+                        if (key.Key == ConsoleKey.Q) {
                             isRunning = false;
+                        }
+
                         forceUpdate = key.Key == ConsoleKey.U;
 
                     }
@@ -590,47 +609,53 @@ namespace Nota.Site.Generator
             }
 
 
-            PostGit(author, committer, repo, config.ContentRepo?.PrimaryBranchName, workdirPath, cache, output);
+            PostGit(author, committer, repo, config.ContentRepo?.PrimaryBranchName ?? "master", workdirPath, cache, output);
             s.Stop();
             Console.WriteLine($"Finishing took {s.Elapsed}");
         }
 
         private static IDocument<Stream> CombineFiles(IDocument<Stream> input, IDocument<ImmutableList<IDocument<Stream>>> removed)
         {
-            var context = input.Context;
-            var removedDocuments = removed.Value.Select(y => y.Metadata.TryGetValue<ImageReferences>())
+            IGeneratorContext context = input.Context;
+            IEnumerable<string> removedDocuments = removed.Value.Select(y => y.Metadata.TryGetValue<ImageReferences>())
             .Where(x => x != null)
-            .SelectMany(x => x.References)
+            .SelectMany(x => x!.References)
             .Select(x => x.ReferencedId);
-            if (removedDocuments.Contains(input.Id))
+            if (removedDocuments.Contains(input.Id)) {
                 return input.WithId($"TO_REMOVE{input.Id}");
+            }
 
             if (Path.GetExtension(input.Id) == ".html") {
-                using var stream = input.Value;
+                using Stream stream = input.Value;
                 using var reader = new StreamReader(stream);
                 string text = reader.ReadToEnd();
-                var originalText = text;
+                string originalText = text;
 
 
 
-                var angleSharpConfig = AngleSharp.Configuration.Default;
-                var angleSharpContext = BrowsingContext.New(angleSharpConfig);
-                var parser = angleSharpContext.GetService<IHtmlParser>();
-                var source = text;
-                var document = parser.ParseDocument(source);
+                IConfiguration angleSharpConfig = AngleSharp.Configuration.Default;
+                IBrowsingContext angleSharpContext = BrowsingContext.New(angleSharpConfig);
+                IHtmlParser? parser = angleSharpContext.GetService<IHtmlParser>();
+                if (parser is null) {
+                    throw new InvalidOperationException("A IHtmlParser should exist.");
+                }
+                string source = text;
+                AngleSharp.Html.Dom.IHtmlDocument document = parser.ParseDocument(source);
 
 
 
-                foreach (var removedDocument in removed.Value) {
-                    var metadata = removedDocument.Metadata.TryGetValue<ImageReferences>();
-                    if (metadata is null)
+                foreach (IDocument<Stream> removedDocument in removed.Value) {
+                    ImageReferences? metadata = removedDocument.Metadata.TryGetValue<ImageReferences>();
+                    if (metadata is null) {
                         continue;
-                    foreach (var item in metadata.References) {
-                        var relativeTo = NotaPath.GetFolder(input.Id).AsSpan();
-                        var absolute = item.ReferencedId.AsSpan();
+                    }
 
-                        var clipedRelative = GetFirstPart(relativeTo, out var relativeToRest);
-                        var clipedAbsolute = GetFirstPart(absolute, out var absolutRest);
+                    foreach (ImageReference item in metadata.References) {
+                        ReadOnlySpan<char> relativeTo = NotaPath.GetFolder(input.Id).AsSpan();
+                        ReadOnlySpan<char> absolute = item.ReferencedId.AsSpan();
+
+                        ReadOnlySpan<char> clipedRelative = GetFirstPart(relativeTo, out ReadOnlySpan<char> relativeToRest);
+                        ReadOnlySpan<char> clipedAbsolute = GetFirstPart(absolute, out ReadOnlySpan<char> absolutRest);
 
                         while (MemoryExtensions.Equals(clipedAbsolute, clipedRelative, StringComparison.Ordinal)) {
                             relativeTo = relativeToRest;
@@ -649,7 +674,7 @@ namespace Nota.Site.Generator
 
                         ReadOnlySpan<char> GetFirstPart(ReadOnlySpan<char> t, out ReadOnlySpan<char> rest)
                         {
-                            var index = t.IndexOf('/');
+                            int index = t.IndexOf('/');
                             if (index == -1) {
                                 rest = string.Empty;
                                 return t;
@@ -658,20 +683,25 @@ namespace Nota.Site.Generator
                                 return t[0..index];
                             }
                         }
-                        var absoluteStr = absolute.ToString();
+                        string absoluteStr = absolute.ToString();
                         // document.QuerySelectorAll($"img[src=\"{absolute.ToString()}\"").Attr("src", "/" + removedDocument.Id);
                         // document.QuerySelectorAll($"img[src=\"{item.ReferencedId}\"").Attr("src", "/" + removedDocument.Id);
 
-                        foreach (var ele in document.All.Where(m => m.LocalName == "img" && m.Attributes.Any(x => x.LocalName == "src" && (x.Value == absoluteStr || x.Value == item.ReferencedId)))) {
-                            var licenseData = removedDocument.Metadata.TryGetValue<XmpMetadata>();
+                        foreach (IElement? ele in document.All.Where(m => m.LocalName == "img" && m.Attributes.Any(x => x.LocalName == "src" && (x.Value == absoluteStr || x.Value == item.ReferencedId)))) {
+                            XmpMetadata? licenseData = removedDocument.Metadata.TryGetValue<XmpMetadata>();
 
                             if (licenseData != null) {
-                                if (licenseData.RightsReserved.HasValue)
-                                    ele.SetAttribute("rightsReseved", licenseData.RightsReserved?.ToString());
-                                if (licenseData.License != null)
+                                if (licenseData.RightsReserved.HasValue) {
+                                    ele.SetAttribute("rightsReseved", licenseData.RightsReserved.Value.ToString());
+                                }
+
+                                if (licenseData.License != null) {
                                     ele.SetAttribute("license", Sanitize(licenseData.License));
-                                if (licenseData.Creators != null)
+                                }
+
+                                if (licenseData.Creators != null) {
                                     ele.SetAttribute("creators", string.Join(", ", licenseData.Creators));
+                                }
                             }
 
                             ele.SetAttribute("src", "/" + removedDocument.Id);
@@ -685,20 +715,20 @@ namespace Nota.Site.Generator
                 }
                 text = document.DocumentElement.OuterHtml;
                 if (originalText != text) {
-                    var data = Encoding.UTF8.GetBytes(text);
+                    byte[] data = Encoding.UTF8.GetBytes(text);
                     return input.With(() => new MemoryStream(data), context.GetHashForString(text));
                 }
             }
 
             return input;
         }
-        private static Stasistium.Stages.IStageBaseOutput<Stream> DocumentsForBranch(Stasistium.Stages.IStageBaseOutput<GitRefStage> input, Stasistium.Stages.IStageBaseOutput<string> key, string editUrl)
+        private static Stasistium.Stages.IStageBaseOutput<Stream> DocumentsForBranch(Stasistium.Stages.IStageBaseOutput<GitRefStage> input, Stasistium.Stages.IStageBaseOutput<string> key, string? editUrl)
         {
             Stasistium.Stages.IStageBaseOutput<SiteMetadata> siteData;
             Stasistium.Stages.IStageBaseOutput<Stream> grouped;
             //NewMethod(input, context, out siteData, out grouped);
-            var context = input.Context;
-            var contentFiles = input
+            IGeneratorContext context = input.Context;
+            Stasistium.Stages.IStageBaseOutput<Stream> contentFiles = input
            .Select(x => x.With(x.Metadata.Add(new GitRefMetadata(x.Value.FrindlyName, x.Value.Type))), "Add GitMetada (Content)")
            .Files(addGitMetadata: true, name: "Read Files from Git (Content)")
                         .XMP()
@@ -722,7 +752,7 @@ namespace Nota.Site.Generator
             // 
 
 
-            var dataFile = contentFiles
+            Stasistium.Stages.IStageBaseOutput<Stream> dataFile = contentFiles
                 .Sidecar<XmlMetaData>(".xmlmeta")
                 .Where(x => x.Id == "data/nota.xml")
                 .Single();
@@ -735,11 +765,11 @@ namespace Nota.Site.Generator
 
                     .Select(x =>
                     {
-                        var startIndex = x.Id.IndexOf('/') + 1;
-                        var endIndex = x.Id.IndexOf('/', startIndex);
-                        var key = x.Id[startIndex..endIndex];
+                        int startIndex = x.Id.IndexOf('/') + 1;
+                        int endIndex = x.Id.IndexOf('/', startIndex);
+                        string key = x.Id[startIndex..endIndex];
 
-                        var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), key);
+                        string location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), key);
 
                         return ArgumentBookMetadata(x, location)
                             .WithId(location);
@@ -760,7 +790,7 @@ namespace Nota.Site.Generator
 
 
 
-            var books = contentFiles.Where(x => x.Id.StartsWith("books/"));
+            Stasistium.Stages.IStageBaseOutput<Stream> books = contentFiles.Where(x => x.Id.StartsWith("books/"));
             grouped = books
 
 
@@ -769,33 +799,33 @@ namespace Nota.Site.Generator
                 .GroupBy
                 (dataFile, x =>
                  {
-                     var startIndex = x.Id.IndexOf('/') + 1;
-                     var endIndex = x.Id.IndexOf('/', startIndex);
+                     int startIndex = x.Id.IndexOf('/') + 1;
+                     int endIndex = x.Id.IndexOf('/', startIndex);
                      return x.Id[startIndex..endIndex];
                  }
 
             , (key, x, dataFile) => GetBooksDocuments(key, x, dataFile, editUrl), "Group by for files");
 
 
-            var files = grouped
+            Stasistium.Stages.IStageBaseOutput<Stream> files = grouped
                 .Select(x => x.With(x.Metadata.Add(new PageLayoutMetadata() { Layout = "book.cshtml" })))
                 .Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
                 .Concat(dataFile.Select(x =>
                 {
-                    var xmlData = x.Metadata.TryGetValue<XmlMetaData>();
-                    String version;
+                    XmlMetaData? xmlData = x.Metadata.TryGetValue<XmlMetaData>();
+                    string version;
                     if (xmlData is null) {
                         System.Console.WriteLine("Did not fond .xmlmeta");
                         version = "";
                     } else {
-                        version = xmlData.NamespaceVersion;
+                        version = xmlData.NamespaceVersion ?? string.Empty;
                     }
 
 
 
-                    var host = x.Metadata.GetValue<HostMetadata>()!.Host;
-                    var newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host?.TrimEnd('/')}/schema/{version}/");
-                    var location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), x.Id);
+                    string? host = x.Metadata.GetValue<HostMetadata>()!.Host;
+                    string newText = hostReplacementRegex.Replace(x.Value.ReadString(), @$"{host?.TrimEnd('/')}/schema/{version}/");
+                    string location = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>()!.CalculatedVersion.ToString(), x.Id);
                     return x.WithId(location).With(() => newText.ToStream(), x.Context.GetHashForString(newText));
                 }))
                 //.Merge(siteData, (file, y) => file.With(file.Metadata.Add(y.Value)), "Merge SiteData with files")
@@ -807,26 +837,26 @@ namespace Nota.Site.Generator
         }
 
         //private static Stasistium.Stages.IStageBaseOutput<Stream> GetBooksDocuments(Stasistium.Stages.IStageBaseOutput<Stream> inputOriginal, string key)
-        private static Stasistium.Stages.IStageBaseOutput<Stream> GetBooksDocuments(Stasistium.Stages.IStageBaseOutput<string> key, Stasistium.Stages.IStageBaseOutput<Stream> inputOriginal, Stasistium.Stages.IStageBaseOutput<Stream> dataFile, string editUrl)
+        private static Stasistium.Stages.IStageBaseOutput<Stream> GetBooksDocuments(Stasistium.Stages.IStageBaseOutput<string> key, Stasistium.Stages.IStageBaseOutput<Stream> inputOriginal, Stasistium.Stages.IStageBaseOutput<Stream> dataFile, string? editUrl)
         {
-            var context = inputOriginal.Context;
+            IGeneratorContext context = inputOriginal.Context;
 
 
 
 
-            var input = inputOriginal.CrossJoin(key, (x, key) => x.WithId(x.Id[$"books/{key.Value}/".Length..]).With(x.Metadata.Add(new Book(key.Value))), "input chnage cross join");
+            Stasistium.Stages.IStageBaseOutput<Stream> input = inputOriginal.CrossJoin(key, (x, key) => x.WithId(x.Id[$"books/{key.Value}/".Length..]).With(x.Metadata.Add(new Book(key.Value))), "input chnage cross join");
 
-            var bookData = input.Where(x => x.Id == $".bookdata")
+            Stasistium.Stages.IStageBaseOutput<MarkdownDocument> bookData = input.Where(x => x.Id == $".bookdata")
                 .Single()
                 .Markdown(GenerateMarkdownDocument)
                 .YamlMarkdownToDocumentMetadata<BookMetadata>();
 
-            var inputWithBookData = input
+            Stasistium.Stages.IStageBaseOutput<Stream> inputWithBookData = input
                .Merge(bookData, (input, data) => input.With(input.Metadata.Add(data.Metadata.TryGetValue<BookMetadata>()!/*We will check for null in the next stage*/)))
                .Where(x => x.Metadata.TryGetValue<BookMetadata>() != null);
 
 
-            var insertedMarkdown = inputWithBookData
+            Stasistium.Stages.IStageBaseOutput<MarkdownDocument> insertedMarkdown = inputWithBookData
                 .Where(x => x.Id != $".bookdata" && IsMarkdown(x))
                 .If(dataFile, x => System.IO.Path.GetExtension(x.Id) == ".xlsx", "Test IF xlsx")
                         .Then((x, _) => x
@@ -850,14 +880,14 @@ namespace Nota.Site.Generator
                     .CrossJoin(key, (x, key) =>
                     {
 
-                        var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
-                        var bookPath = NotaPath.Combine(prefix, key.Value);
+                        string prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                        string bookPath = NotaPath.Combine(prefix, key.Value);
 
-                        var imageBlocks = x.Value.GetBlocksRecursive()
+                        IEnumerable<ImageInline> imageBlocks = x.Value.GetBlocksRecursive()
                                                    .OfType<IInlineContainer>()
                                                    .SelectMany(x => x.GetInlineRecursive())
                                                    .OfType<ImageInline>();
-                        foreach (var item in imageBlocks) {
+                        foreach (ImageInline item in imageBlocks) {
                             item.Url = NotaPath.Combine(bookPath, NotaPath.GetFolder(x.Id), item.Url);
                             Console.WriteLine($" {x.Id} -> {item.Url}");
                         }
@@ -868,14 +898,14 @@ namespace Nota.Site.Generator
 
 
 
-            var insertedDocuments = insertedMarkdown.ListTransform(x =>
+            Stasistium.Stages.IStageBaseOutput<string[]> insertedDocuments = insertedMarkdown.ListTransform(x =>
             {
-                var values = x.SelectMany(y => y.Metadata.TryGetValue<DependendUponMetadata>()?.DependsOn ?? Array.Empty<string>()).Distinct().Where(z => z != null).ToArray();
-            //var context = x.First().Context;
+                string[] values = x.SelectMany(y => y.Metadata.TryGetValue<DependendUponMetadata>()?.DependsOn ?? Array.Empty<string>()).Distinct().Where(z => z != null).ToArray();
+                //var context = x.First().Context;
                 return context.CreateDocument(values, context.GetHashForObject(values), "documentIdsThatAreInserted");
             });
 
-            var markdown = insertedMarkdown
+            Stasistium.Stages.IStageBaseOutput<MarkdownDocument> markdown = insertedMarkdown
             // we will remove all docments that are inserted in another.
             .Merge(insertedDocuments, (doc, m) => doc.With(doc.Metadata.Add(new AllDocumentsThatAreDependedOn() { DependsOn = m.Value })))
             .Where(x => !x.Metadata.GetValue<AllDocumentsThatAreDependedOn>().DependsOn.Contains(x.Id))
@@ -884,29 +914,29 @@ namespace Nota.Site.Generator
                 ;
 
 
-            var nonMarkdown = inputWithBookData
+            Stasistium.Stages.IStageBaseOutput<Stream> nonMarkdown = inputWithBookData
                 .Where(x => x.Id != $".bookdata" && !IsMarkdown(x));
 
 
-            var chapters = markdown.ListTransform(x => context.CreateDocument(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
+            Stasistium.Stages.IStageBaseOutput<string> chapters = markdown.ListTransform(x => context.CreateDocument(string.Empty, string.Empty, "chapters", context.EmptyMetadata.Add(GenerateContentsTable(x))));
 
 
-            var referenceLocation = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)), "merge prepared for render")
+            Stasistium.Stages.IStageBaseOutput<MarkdownDocument> referenceLocation = markdown.Merge(chapters, (doc, c) => doc.With(doc.Metadata.Add(c.Metadata)), "merge prepared for render")
                             .Select(x => x.WithId(Path.ChangeExtension(x.Id, ".html")))
                             .GetReferenceLocation();
 
-            var preparedForRender = referenceLocation
+            Stasistium.Stages.IStageBaseOutput<MarkdownDocument> preparedForRender = referenceLocation
                 .CrossJoin(key, (x, key) =>
                  {
 
 
-                     var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                     string prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
 
-                     var newReferences = x.Metadata.GetValue<ImageReferences>().References
+                     IOrderedEnumerable<ImageReference> newReferences = x.Metadata.GetValue<ImageReferences>().References
                          .Select(y =>
                          {
                              BookVersion calculatedVersion = x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion;
-                             BookMetadata bookMetadata2 = x.Metadata.TryGetValue<BookMetadata>();
+                             BookMetadata? bookMetadata2 = x.Metadata.TryGetValue<BookMetadata>();
                              BookMetadata bookMetadata = x.Metadata.GetValue<BookMetadata>();
 
                              string DocumentId = NotaPath.Combine(prefix, key.Value, y.Document);
@@ -948,7 +978,7 @@ namespace Nota.Site.Generator
 
 
 
-            var markdownRendered = preparedForRender
+            Stasistium.Stages.IStageBaseOutput<Stream> markdownRendered = preparedForRender
                 .ToHtml(new NotaMarkdownRenderer(editUrl), "Markdown To HTML")
                 .FormatXml()
                 .ToStream()
@@ -956,21 +986,21 @@ namespace Nota.Site.Generator
 
 
 
-            var concated = markdownRendered
+            Stasistium.Stages.IStageBaseOutput<Stream> concated = markdownRendered
                             .Concat(nonMarkdown);
 
-            var stiched = concated
+            Stasistium.Stages.IStageBaseOutput<Stream> stiched = concated
                 .CrossJoin(key, (x, key) => x.WithId($"{key.Value}/{x.Id}"), "Stitch corssJoin")
            ;
 
 
 
 
-            var changedDocuments = stiched.CrossJoin(key, (x, key) =>
+            Stasistium.Stages.IStageBaseOutput<Stream> changedDocuments = stiched.CrossJoin(key, (x, key) =>
              {
-                 var prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
-                 var bookPath = NotaPath.Combine(prefix, key.Value);
-                 var changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
+                 string prefix = NotaPath.Combine("Content", x.Metadata.GetValue<GitRefMetadata>().CalculatedVersion.ToString());
+                 string bookPath = NotaPath.Combine(prefix, key.Value);
+                 IDocument<Stream> changedDocument = ArgumentBookMetadata(x.WithId(NotaPath.Combine(prefix, x.Id)), bookPath);
                  return changedDocument;
              }, "Changed Cross Join");
             return changedDocuments;
@@ -979,7 +1009,7 @@ namespace Nota.Site.Generator
 
         private static bool FileCanHasLicense(IDocument x)
         {
-            var extension = NotaPath.GetExtension(x.Id);
+            string extension = NotaPath.GetExtension(x.Id);
             return extension != ".html"
                 && extension != ".cshtml"
                 && extension != ".css"
@@ -994,14 +1024,17 @@ namespace Nota.Site.Generator
         private static IDocument<T> ArgumentBookMetadata<T>(IDocument<T> x, string location)
             where T : class
         {
-            var newMetadata = x.Metadata.TryGetValue<BookMetadata>();
-            if (newMetadata is null)
+            BookMetadata? newMetadata = x.Metadata.TryGetValue<BookMetadata>();
+            if (newMetadata is null) {
                 return x;
+            }
+
             newMetadata = newMetadata.WithLocation(location);
 
-            var gitdata = x.Metadata.TryGetValue<GitRefMetadata>();
-            if (gitdata != null)
+            GitRefMetadata? gitdata = x.Metadata.TryGetValue<GitRefMetadata>();
+            if (gitdata != null) {
                 newMetadata = newMetadata.WithVersion(gitdata.CalculatedVersion);
+            }
 
             return x.With(x.Metadata.AddOrUpdate(newMetadata));
         }
@@ -1015,7 +1048,7 @@ namespace Nota.Site.Generator
                 };
             }
             //var chapters = documents.Select(chapterDocument =>
-            TableOfContentsEntry? entry = null;
+            TableOfContentsEntry? entry;
 
             //entry.Page = chapterDocument.Id;
             //entry.Id = string.Empty;
@@ -1023,13 +1056,15 @@ namespace Nota.Site.Generator
 
             var stack = new Stack<(MarkdownBlock block, string page)>();
 
-            foreach (var chapterDocument in documents.Reverse())
+            foreach (IDocument<MarkdownDocument> chapterDocument in documents.Reverse()) {
                 PushBlocks(chapterDocument.Value.Blocks, chapterDocument.Id);
+            }
 
             void PushBlocks(IEnumerable<MarkdownBlock> blocks, string page)
             {
-                foreach (var item in blocks.Reverse())
+                foreach (MarkdownBlock? item in blocks.Reverse()) {
                     stack.Push((item, page));
+                }
             }
 
             var chapterList = new Stack<TableOfContentsEntry>();
@@ -1043,19 +1078,18 @@ namespace Nota.Site.Generator
             };
             chapterList.Push(entry);
 
-            while (stack.TryPop(out var element)) {
-                var (currentBlock, documentId) = element;
+            while (stack.TryPop(out (MarkdownBlock block, string page) element)) {
+                (MarkdownBlock currentBlock, string documentId) = element;
                 switch (currentBlock) {
                     case HeaderBlock headerBlock:
 
                         string id;
-                        var title = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
-                        if (headerBlock is ChapterHeaderBlock ch && ch.ChapterId != null)
+                        string title = Stasistium.Stages.MarkdownRenderer.GetHeaderText(headerBlock);
+                        if (headerBlock is ChapterHeaderBlock ch && ch.ChapterId != null) {
                             id = ch.ChapterId;
-                        else
+                        } else {
                             id = title;
-
-
+                        }
 
                         var currentChapter = new TableOfContentsEntry()
                         {
@@ -1067,8 +1101,10 @@ namespace Nota.Site.Generator
 
 
 
-                        if (!chapterList.TryPeek(out var lastChapter))
+                        if (!chapterList.TryPeek(out TableOfContentsEntry? lastChapter)) {
                             lastChapter = null;
+                        }
+
                         if (lastChapter is null) {
                             System.Diagnostics.Debug.Assert(entry is null);
                             chapterList.Push(currentChapter);
@@ -1079,7 +1115,7 @@ namespace Nota.Site.Generator
                         } else {
 
                             while (lastChapter.Level >= currentChapter.Level) {
-                                chapterList.Pop();
+                                _ = chapterList.Pop();
                                 lastChapter = chapterList.Peek();
                             }
 
@@ -1183,7 +1219,7 @@ namespace Nota.Site.Generator
                 try {
                     repo = new LibGit2Sharp.Repository(workdirPath);
 
-                    var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
+                    RepositoryStatus status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
 
                     //if (status.IsDirty)
                     //{
@@ -1192,8 +1228,8 @@ namespace Nota.Site.Generator
 
                     //}
 
-                    var remote = repo.Network.Remotes["origin"];
-                    var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                    Remote remote = repo.Network.Remotes["origin"];
+                    IEnumerable<string> refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
                     LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
 
 
@@ -1210,8 +1246,8 @@ namespace Nota.Site.Generator
             } else {
                 repo = new LibGit2Sharp.Repository(LibGit2Sharp.Repository.Clone(config.WebsiteRepo?.Url ?? throw new InvalidOperationException($"{nameof(Config.SchemaRepo)} not set on configuration."), workdirPath));
             }
-            var localMaster = repo.Branches[config.WebsiteRepo?.PrimaryBranchName ?? "master"];
-            var originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
+            Branch? localMaster = repo.Branches[config.WebsiteRepo?.PrimaryBranchName ?? "master"];
+            Branch? originMaster = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
             if (localMaster is null) {
 
                 if (originMaster is null) {
@@ -1219,9 +1255,9 @@ namespace Nota.Site.Generator
                 }
 
                 localMaster = repo.CreateBranch(config.WebsiteRepo?.PrimaryBranchName ?? "master", originMaster.Tip);
-                repo.Branches.Update(localMaster, b => b.TrackedBranch = originMaster.CanonicalName);
+                _ = repo.Branches.Update(localMaster, b => b.TrackedBranch = originMaster.CanonicalName);
             }
-            LibGit2Sharp.Commands.Checkout(repo, localMaster, new LibGit2Sharp.CheckoutOptions()
+            _ = LibGit2Sharp.Commands.Checkout(repo, localMaster, new LibGit2Sharp.CheckoutOptions()
             {
                 CheckoutModifiers = CheckoutModifiers.Force
             });
@@ -1229,21 +1265,24 @@ namespace Nota.Site.Generator
             repo.Reset(ResetMode.Hard, originMaster.Tip);
 
 
-            if (Directory.Exists(output))
+            if (Directory.Exists(output)) {
                 Directory.Delete(output, true);
-
-            if (Directory.Exists(cache))
-                Directory.Delete(cache, true);
-
-            Directory.CreateDirectory(output);
-            var workDirInfo = new DirectoryInfo(workdirPath);
-            foreach (var path in workDirInfo.GetDirectories().Where(x => x.Name != ".git")) {
-                if (path.Name == "cache")
-                    path.MoveTo(cache);
-                else
-                    path.MoveTo(Path.Combine(output, path.Name));
             }
-            foreach (var path in workDirInfo.GetFiles()) {
+
+            if (Directory.Exists(cache)) {
+                Directory.Delete(cache, true);
+            }
+
+            _ = Directory.CreateDirectory(output);
+            var workDirInfo = new DirectoryInfo(workdirPath);
+            foreach (DirectoryInfo? path in workDirInfo.GetDirectories().Where(x => x.Name != ".git")) {
+                if (path.Name == "cache") {
+                    path.MoveTo(cache);
+                } else {
+                    path.MoveTo(Path.Combine(output, path.Name));
+                }
+            }
+            foreach (FileInfo path in workDirInfo.GetFiles()) {
                 path.MoveTo(Path.Combine(output, path.Name));
             }
 
@@ -1253,31 +1292,36 @@ namespace Nota.Site.Generator
         private static void PostGit(LibGit2Sharp.Signature author, LibGit2Sharp.Signature committer, LibGit2Sharp.Repository repo, string branch, string workdirPath, string cache, string output)
         {
             var outputInfo = new DirectoryInfo(output);
-            foreach (var path in outputInfo.GetDirectories())
+            foreach (DirectoryInfo path in outputInfo.GetDirectories()) {
                 path.MoveTo(Path.Combine(workdirPath, path.Name));
-            foreach (var path in outputInfo.GetFiles())
+            }
+
+            foreach (FileInfo path in outputInfo.GetFiles()) {
                 path.MoveTo(Path.Combine(workdirPath, path.Name));
+            }
 
             var cacheDirectory = new DirectoryInfo(cache);
-            if (cacheDirectory.Exists)
+            if (cacheDirectory.Exists) {
                 cacheDirectory.MoveTo(Path.Combine(workdirPath, cache));
+            }
 
-
-            var status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
+            RepositoryStatus status = repo.RetrieveStatus(new LibGit2Sharp.StatusOptions() { });
             if (status.Any()) {
-                var filePathsAdded = status.Added.Concat(status.Modified).Concat(status.RenamedInIndex).Concat(status.RenamedInWorkDir).Concat(status.Untracked).Select(mods => mods.FilePath);
-                foreach (var filePath in filePathsAdded)
+                IEnumerable<string> filePathsAdded = status.Added.Concat(status.Modified).Concat(status.RenamedInIndex).Concat(status.RenamedInWorkDir).Concat(status.Untracked).Select(mods => mods.FilePath);
+                foreach (string? filePath in filePathsAdded) {
                     repo.Index.Add(filePath);
+                }
 
-                var filePathsRemove = status.Missing.Select(mods => mods.FilePath);
-                foreach (var filePath in filePathsRemove)
+                IEnumerable<string> filePathsRemove = status.Missing.Select(mods => mods.FilePath);
+                foreach (string? filePath in filePathsRemove) {
                     repo.Index.Remove(filePath);
+                }
 
                 repo.Index.Write();
 
 
                 // Commit to the repository
-                var commit = repo.Commit("Updated Build", author, committer, new LibGit2Sharp.CommitOptions() { });
+                Commit commit = repo.Commit("Updated Build", author, committer, new LibGit2Sharp.CommitOptions() { });
                 //repo.Branches.Add()
                 ;
                 //repo.Network.Push(repo.Network.Remotes["origin"], repo.Head.CanonicalName);
@@ -1289,14 +1333,16 @@ namespace Nota.Site.Generator
 
     public class Book
     {
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         private Book()
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         {
 
         }
 
         public Book(string name)
         {
-            this.Name = name;
+            Name = name;
         }
 
         public string Name { get; private set; }

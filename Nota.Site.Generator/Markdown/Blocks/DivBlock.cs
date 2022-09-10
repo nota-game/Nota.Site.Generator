@@ -99,22 +99,22 @@ var tmp = markdown.ToString();
         {
             var builder = new StringBuilder();
 
-            builder.Append(":::");
+            _ = builder.Append(":::");
 
             if (this.CssClass is not null) {
-                builder.Append(" ");
-                builder.Append(this.CssClass);
+                _ = builder.Append(" ");
+                _ = builder.Append(this.CssClass);
             }
 
             bool first = true;
             foreach (var b in this.Blocks) {
                 if (!first) {
-                    builder.Append("\n\n");
+                    _ = builder.Append("\n\n");
                 }
-                builder.AppendLine(b.ToString());
+                _ = builder.AppendLine(b.ToString());
                 first = false;
             }
-            builder.Append("/::");
+            _ = builder.Append("/::");
             return builder.ToString();
         }
     }
