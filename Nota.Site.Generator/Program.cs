@@ -980,7 +980,7 @@ namespace Nota.Site.Generator
 
             Stasistium.Stages.IStageBaseOutput<Stream> markdownRendered = preparedForRender
                 .ToHtml(new NotaMarkdownRenderer(editUrl), "Markdown To HTML")
-                .FormatXml()
+                // .FormatXml()
                 .ToStream()
                 .Silblings();
 
