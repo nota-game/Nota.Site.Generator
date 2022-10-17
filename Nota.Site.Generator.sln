@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29609.76
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32825.248
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nota.Site.Generator", "Nota.Site.Generator\Nota.Site.Generator.csproj", "{85595D8A-F146-40B9-80B7-106167F4951B}"
 EndProject
@@ -19,7 +19,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PdfSharp", "dependencys\PDF
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PdfSharp.Charting", "dependencys\PDFsharp\src\PdfSharp.Charting\PdfSharp.Charting.csproj", "{342BF4CD-0BD6-448C-BB54-3584583C88B4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stasistium.PDF", "Stasistium.PDF\Stasistium.PDF.csproj", "{A8E399A8-F5C9-4CED-8778-C086BED3E0B3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Stasistium.PDF", "Stasistium.PDF\Stasistium.PDF.csproj", "{A8E399A8-F5C9-4CED-8778-C086BED3E0B3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

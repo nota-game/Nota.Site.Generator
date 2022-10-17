@@ -4,6 +4,11 @@
       "commandName": "Project",
       "commandLineArgs": "--serve",
       "workingDirectory": "C:\\Users\\patri\\source\\repos\\nota-game\\Nota.Site.Generator.Test"
+    },
+    "Production": {
+      "commandName": "Project",
+      "commandLineArgs": "--configuration .\\test\\config.local.json --serve",
+      "workingDirectory": "C:\\Users\\patri\\source\\repos\\nota-game\\nota-game.github.io"
     }
   }
 }
