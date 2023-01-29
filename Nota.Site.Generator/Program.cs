@@ -754,8 +754,13 @@ namespace Nota.Site.Generator
 
             Stasistium.Stages.IStageBaseOutput<Stream> dataFile = contentFiles
                 .Sidecar<XmlMetaData>(".xmlmeta")
-                .Where(x => x.Id == "data/nota.xml")
-                .Single();
+                .Where(x => x.Id.StartsWith( "data/"))
+                ;
+
+            // Stasistium.Stages.IStageBaseOutput<Stream> dataFile = contentFiles
+            //     .Sidecar<XmlMetaData>(".xmlmeta")
+            //     .Where(x => x.Id == "data/nota.xml")
+            //     .Single();
 
 
             siteData = contentFiles
