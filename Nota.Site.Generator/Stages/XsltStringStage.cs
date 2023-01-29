@@ -15,6 +15,7 @@ namespace Nota.Site.Generator.Stages
 {
     public class XsltStringStage : Stasistium.Stages.StageBase<string, string, string>
     {
+        private static readonly XmlReaderSettings xmlReaderSettings = new XmlReaderSettings(){ DtdProcessing= DtdProcessing.Parse};
         public XsltStringStage(IGeneratorContext context, string? name = null) : base(context, name)
         {
         }
@@ -31,14 +32,14 @@ namespace Nota.Site.Generator.Stages
 
                 var xslt = new XslCompiledTransform();
                 using (var strigReader = new StringReader(xsltDocument.Value))
-                using (var xmlReader = XmlReader.Create(strigReader))
+                using (var xmlReader = XmlReader.Create(strigReader, xmlReaderSettings))
                     xslt.Load(xmlReader);
 
 
                 var builder = new StringBuilder();
 
                 using (var strigReader = new StringReader(dataDocument.Value))
-                using (var reader = XmlReader.Create(strigReader))
+                using (var reader = XmlReader.Create(strigReader, xmlReaderSettings))
 
                 using (var stringWriter = new StringWriter(builder))
                 using (var writer = XmlWriter.Create(stringWriter))
@@ -55,6 +56,8 @@ namespace Nota.Site.Generator.Stages
 
     public class XsltStageStream : Stasistium.Stages.StageBase<Stream, Stream, string>
     {
+        private static readonly XmlReaderSettings xmlReaderSettings = new XmlReaderSettings(){ DtdProcessing= DtdProcessing.Parse};
+
         [Stasistium.StageName("Xslt")]
         public XsltStageStream(IGeneratorContext context, string? name = null) : base(context, name)
         {
@@ -72,14 +75,14 @@ namespace Nota.Site.Generator.Stages
 
                 var xslt = new XslCompiledTransform();
                 using (var xsltStream = xsltDocument.Value)
-                using (var xmlReader = XmlReader.Create(xsltStream))
+                using (var xmlReader = XmlReader.Create(xsltStream, xmlReaderSettings))
                     xslt.Load(xmlReader);
 
 
                 var builder = new StringBuilder();
 
                 using (var xmlValue = dataDocument.Value)
-                using (var reader = XmlReader.Create(xmlValue))
+                using (var reader = XmlReader.Create(xmlValue, xmlReaderSettings))
 
                 using (var stringWriter = new StringWriter(builder))
                 //using (var writer = XmlWriter.Create(stringWriter))
