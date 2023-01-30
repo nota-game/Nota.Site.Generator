@@ -8,7 +8,7 @@
     "Production": {
       "commandName": "Project",
       "commandLineArgs": "--configuration .\\test\\config.local.json --serve",
-      "workingDirectory": "C:\\Users\\patri\\source\\repos\\nota-game\\nota-game.github.io"
+      "workingDirectory": ".\\..\\..\\nota-game.github.io"
     }
   }
 }
