@@ -752,10 +752,17 @@ namespace Nota.Site.Generator
             // 
 
 
+            //Stasistium.Stages.IStageBaseOutput<Stream> dataFile = contentFiles
+            //    .Sidecar<XmlMetaData>(".xmlmeta")
+            //    .Where(x => x.Id.StartsWith( "data/"))
+            //    ;
+
             Stasistium.Stages.IStageBaseOutput<Stream> dataFile = contentFiles
                 .Sidecar<XmlMetaData>(".xmlmeta")
-                .Where(x => x.Id.StartsWith( "data/"))
-                ;
+                .Where(x => x.Id == "data/nota.xml")
+                .ResolveXml(contentFiles, "Resolve nota data")
+                .ToStream()
+                .Single();
 
             // Stasistium.Stages.IStageBaseOutput<Stream> dataFile = contentFiles
             //     .Sidecar<XmlMetaData>(".xmlmeta")
@@ -1237,6 +1244,12 @@ namespace Nota.Site.Generator
                     IEnumerable<string> refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
                     LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, string.Empty);
 
+                    Branch? localMasterTest = repo.Branches[config.WebsiteRepo?.PrimaryBranchName ?? "master"];
+                    Branch? originMasterTest = repo.Branches[$"origin/{config.WebsiteRepo?.PrimaryBranchName ?? "master"}"];
+
+                    if(localMasterTest is null && originMasterTest is null) {
+                        throw new InvalidSpecificationException("");
+                    }
 
 
                     //LibGit2Sharp.Commands.Pull(repo, author, new LibGit2Sharp.PullOptions() {   MergeOptions = new LibGit2Sharp.MergeOptions() { FastForwardStrategy = LibGit2Sharp.FastForwardStrategy.FastForwardOnly } });
